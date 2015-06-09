@@ -2,7 +2,7 @@
  * shift / reset
  *
  * As the type of shift and reset must be linked in some way,
- * two possibilities : additional parameter and monomophisation.
+ * two possibilities : additional parameter and monomorphisation.
  *
  * This piece of code would be really more interesting with a continuation duplication !
  *
