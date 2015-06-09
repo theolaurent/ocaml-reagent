@@ -58,7 +58,13 @@ end = struct
     in { reset ; shift }
 end
 
-(* the same, without the overhead of first-class modules *)
+(* The same, without the overhead of first-class modules. *)
+(*
+ * Be carefull, these are not exactly the same functions.
+ * Two different instances of the code above are never compatible while
+ * below, two different instances that have the same type are perfeclty
+ * interchangeable
+ *)
 
 module ParamShiftReset_ : sig
   type 'a wit
