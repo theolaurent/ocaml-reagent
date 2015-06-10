@@ -2,38 +2,38 @@
  * shift / reset
  *
  * As the type of shift and reset must be linked in some way,
- * two possibilities : additional parameter and monomorphisation.
+ * three possibilities : additional parameter, monomorphisation and a functor.
  *
  * This piece of code would be really more interesting with a continuation duplication !
  *
- * Besides, it could become really generic with modular implicits ?
+ * Besides, it could maybe become really generic with modular implicits..
  *)
 
 module ParamShiftReset : sig
-  type 'a wit
-  val make_wit : unit -> 'a wit
-  val reset : 'a wit -> (unit -> 'a) -> 'a
-  val shift : 'a wit -> (('b -> 'a) -> 'a) -> 'b
+  type 'a t
+  val make_witness : unit -> 'a t
+  val reset : 'a t -> (unit -> 'a) -> 'a
+  val shift : 'a t -> (('b -> 'a) -> 'a) -> 'b
 end = struct
-  module type wit = sig type v effect Shift : (('a -> v) -> v) -> 'a end
+  module type t = sig type v effect Shift : (('a -> v) -> v) -> 'a end
 
-  type 'a wit = (module wit with type v = 'a)
+  type 'a t = (module t with type v = 'a)
 
-  let make_wit (type u) () : u wit =
+  let make_witness (type u) () : u t =
     let module M = struct
         type v = u
         effect Shift : (('a -> v) -> v) -> 'a
       end in
     (module M)
 
-  let reset (type u) (w:u wit) code =
+  let reset (type u) (w:u t) code =
     let module M = (val w) in
     match code () with
     | v -> v
     | effect (M.Shift f) k -> f (continue k)
 
 
-  let shift (type u) (w:u wit) f =
+  let shift (type u) (w:u t) f =
     let module M = (val w) in
     perform (M.Shift f)
 end
@@ -56,4 +56,21 @@ end = struct
     in
     let shift f = perform (M.Shift f)
     in { reset ; shift }
+end
+
+
+module FunctShiftReset (X: sig type t end) : sig
+  val reset : (unit -> X.t) -> X.t
+  val shift : (('a -> X.t) -> X.t) -> 'a
+end = struct
+  effect Shift : (('a -> X.t) -> X.t) -> 'a
+
+  let reset code =
+    match code () with
+    | v -> v
+    | effect (Shift f) k -> f (continue k)
+
+
+  let shift f =
+    perform (Shift f)
 end
