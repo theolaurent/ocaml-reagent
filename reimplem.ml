@@ -53,7 +53,7 @@ let perform (type u) (a:u eff) =
     let thread = Thread.self ()
   end in
   try
-    let mv = Stack.pop stack in
+    let mv = Stack.pop stack     (* is it the right place ? *) in
     let () = Mvar.put mv (Some (module M : effect)) in
     let res = Mvar.take M.mvar_ret in
     let () = Stack.push mv stack (* is it the right place ? *) in
@@ -81,4 +81,7 @@ let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
                 (* but Invalid_argument("Thread.kill: not implemented") *)
                 res
 
-  in loop ()
+  in
+  let res = loop () in
+  let _ = Stack.pop stack in
+  res
