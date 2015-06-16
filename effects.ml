@@ -5,15 +5,8 @@
  *
  * The Mvar module has been borrowed here : https://github.com/johnelse/ocaml-mvar.
  *
- * Usage :
- * type _ eff += Effect : [some type] eff
- *
- * let h (type u) (x:u eff) (k:(u, 'b) cont) : 'b = match x with
- *   | Effect -> [... some code ...]
- *   | _ -> continue k (perform x)
- *
- * tryeff (function () -> ... [some code] ... perform Effect ... [some code] ...)
- *        { handle = h }
+ * This module interface is identical to the one of the effects module of
+ * ocaml multicore. It only misses the syntactic sugar !
  *
  * TODO : I think there might be a problem with multiple threads on user-side.
  *  If a user use this library
@@ -27,11 +20,11 @@ type _ eff = ..
 exception Unhandled
 
 
-type ('a, 'b) cont = { mutable eff_return     : 'a Mvar.t option ;
-                               thread         : Thread.t         ;
-                               resume_waiting : unit -> 'b       }
+type ('a, 'b) continuation = { mutable eff_return     : [`Exn of exn | `Res of 'a] Mvar.t option ;
+                                       thread         : Thread.t         ;
+                                       resume_waiting : unit -> 'b       }
 
-let continue { eff_return ; resume_waiting } x =
+let pass_to_continuation { eff_return ; resume_waiting } x =
   begin match eff_return with
  (* Ensuring that the "continuation" is called only once.  *
   * Using the mvar twice would lead to a blocking          *
@@ -42,10 +35,13 @@ let continue { eff_return ; resume_waiting } x =
   | Some mvar -> Mvar.put mvar x ; resume_waiting ()
   end
 
+let continue c x = pass_to_continuation c (`Res x)
+let discontinue c e = pass_to_continuation c (`Exn e)
+
 module type effect = sig
   type t
   val e : t eff
-  val mvar_ret : t Mvar.t (* the one-shot thing should in fact *
+  val mvar_ret : [`Res of t | `Exn of exn] Mvar.t (* the one-shot thing should in fact *
                            * be enforced here !                *)
 end
 type effect = (module effect)
@@ -65,34 +61,49 @@ let perform (type u) (a:u eff) =
     let () = Mvar.put mv (Some (module M : effect)) in
     let res = Mvar.take M.mvar_ret in
     let () = Stack.push mv stack (* is it the right place ? *) in
-    res
+    match res with
+    | `Res x -> x
+    | `Exn e -> raise e
 
   with _ -> raise Unhandled
 
-type 'b handler = { handle : 'a . 'a eff -> ('a, 'b) cont -> 'b }
+type ('b, 'c) handler = { eff    : 'a . 'a eff -> ('a, 'c) continuation -> 'c ;
+                          exn    : exn -> 'c                                  ;
+                          return : 'b -> 'c                                   }
 
 
-let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
+let handle h f x =
   let mv = Mvar.create_empty () in
   let () = Stack.push mv stack in
-  let t = Resthread.create (fun () -> let r = f () in
+  let t = ThreadWithRes.spawn (fun () -> let r = f x in
                                       let () = Mvar.put mv None in
                                       r) ()
   in
   let rec loop () = match Mvar.take mv with
-    | None -> Resthread.get_result t
+    | None -> begin match ThreadWithRes.get_result t with
+                    | `Res x -> h.return x
+                    | `Exn e -> h.exn e
+                    | `BrutalFailure -> failwith "One thread failed very brutally"
+              end
     | Some e -> let module M : effect = (val e) in
                 (* creating the continuation *)
                 let c = { eff_return     = Some M.mvar_ret ;
-                          thread         = Resthread.get_thread t  ;
+                          thread         = ThreadWithRes.get_thread t  ;
                           resume_waiting = loop            } in
-                let res = h.handle M.e c in
+                let res = h.eff M.e c in
                 (* destroying the "continuation" (in case it has not been consumed) *)
                 (* let () = Thread.kill c.thread in *)
                 (* Hmmm... I get Invalid_argument("Thread.kill: not implemented") *)
                 res
 
-  in
-  let res = loop () in
-  let _ = Stack.pop stack in
-  res
+  in try
+    let res = loop () in
+    let _ = Stack.pop stack in
+    res
+  with e -> let _ = Stack.pop stack in raise e
+
+
+let delegate e k =
+  match perform e with
+  | v -> continue k v
+  | exception e -> discontinue k e
