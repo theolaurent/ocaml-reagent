@@ -13,9 +13,6 @@
  * tryeff (function () -> ... [some code] ... perform Effect ... [some code] ...)
  *        { handle = h }
  *
- * TODO : My "continuations" are clearly one-shot, but there is no second-call detection,
- * that might create problems.
- *
  * TODO : I think there might be a problem with multiple threads on user-side.
  *  If a user use this library
  * and multiple threads, I think the sharing of the stack might be a problem.
@@ -28,16 +25,25 @@ type _ eff = ..
 exception Unhandled
 
 
-type ('a, 'b) cont = { eff_return : 'a Mvar.t ; resume_waiting : unit -> 'b }
+type ('a, 'b) cont = { mutable eff_return     : 'a Mvar.t option ;
+                               thread         : Thread.t         ;
+                               resume_waiting : unit -> 'b       }
 
 let continue { eff_return ; resume_waiting } x =
-    Mvar.put eff_return x ; resume_waiting ()
+  begin match eff_return with
+ (* Ensuring that the "continuation" is called only once.  *
+  * Using the mvar twice would lead to a blocking          *
+  * as its content is taken only once.                     *
+  * Maybe it would be more elgant to use a specialized     *
+  * data strucure, instead of an mvar...                   *)
+  | None -> raise (Invalid_argument "continuation already used")
+  | Some mvar -> Mvar.put mvar x ; resume_waiting ()
+  end
 
 module type effect = sig
   type t
   val e : t eff
   val mvar_ret : t Mvar.t
-  val thread : Thread.t
 end
 type effect = (module effect)
 
@@ -50,7 +56,6 @@ let perform (type u) (a:u eff) =
     type t = u
     let e = a
     let mvar_ret =  Mvar.create_empty ()
-    let thread = Thread.self ()
   end in
   try
     let mv = Stack.pop stack     (* is it the right place ? *) in
@@ -74,10 +79,13 @@ let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
   let rec loop () = match Mvar.take mv with
     | None -> Resthread.get_result t
     | Some e -> let module M : effect = (val e) in
-                let res = h.handle M.e { eff_return = M.mvar_ret ;
-                                         resume_waiting = loop } in
+                (* creating the continuation *)
+                let c = { eff_return     = Some M.mvar_ret ;
+                          thread         = Resthread.get_thread t  ;
+                          resume_waiting = loop            } in
+                let res = h.handle M.e c in
                 (* destroying the "continuation" (in case it has not been consumed) *)
-                (* let () = Thread.kill M.thread in *)
+                (* let () = Thread.kill c.thread in *)
                 (* but Invalid_argument("Thread.kill: not implemented") *)
                 res
 

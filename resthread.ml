@@ -19,7 +19,7 @@ let create f a =
                              ) a in
   { result ; thread }
 
-let thread_id x = Thread.id x.thread
+let get_thread x = x.thread
 
 let rec get_result t =
   let () = Thread.join t.thread in
