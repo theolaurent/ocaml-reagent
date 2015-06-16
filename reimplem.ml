@@ -1,7 +1,7 @@
 
 (*
- * A second version of the reimplementation of the effect system with
- * bare ocaml 4.02 (using threads to get a kind of duplication of the stack).
+ * A reimplementation of the effect system with bare ocaml 4.02,
+ * using threads to get a kind of duplication of the stack.
  *
  * The Mvar module has been borrowed here : https://github.com/johnelse/ocaml-mvar.
  *
@@ -13,10 +13,11 @@
  * tryeff (function () -> ... [some code] ... perform Effect ... [some code] ...)
  *        { handle = h }
  *
- * These "continuations" are clearly one-shot, but there is no second-call detection,
+ * TODO : My "continuations" are clearly one-shot, but there is no second-call detection,
  * that might create problems.
  *
- * I think there might be a problem with multiple threads on user-side. If a user use this library
+ * TODO : I think there might be a problem with multiple threads on user-side.
+ *  If a user use this library
  * and multiple threads, I think the sharing of the stack might be a problem.
  *
  *)
@@ -73,7 +74,8 @@ let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
   let rec loop () = match Mvar.take mv with
     | None -> Resthread.get_result t
     | Some e -> let module M : effect = (val e) in
-                let res = h.handle M.e { eff_return = M.mvar_ret ; resume_waiting = loop } in
+                let res = h.handle M.e { eff_return = M.mvar_ret ;
+                                         resume_waiting = loop } in
                 (* destroying the "continuation" (in case it has not been consumed) *)
                 (* let () = Thread.kill M.thread in *)
                 (* but Invalid_argument("Thread.kill: not implemented") *)
