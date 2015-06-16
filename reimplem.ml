@@ -6,6 +6,8 @@
  * The Mvar module has been borrowed here : https://github.com/johnelse/ocaml-mvar.
  *
  * Usage :
+ * type _ eff += Effect : [some type] eff
+ *
  * let h (type u) (x:u eff) (k:(u, 'b) cont) : 'b = match x with
  *   | Effect -> [... some code ...]
  *   | _ -> continue k (perform x)
@@ -43,7 +45,8 @@ let continue { eff_return ; resume_waiting } x =
 module type effect = sig
   type t
   val e : t eff
-  val mvar_ret : t Mvar.t
+  val mvar_ret : t Mvar.t (* the one-shot thing should in fact *
+                           * be enforced here !                *)
 end
 type effect = (module effect)
 
@@ -86,7 +89,7 @@ let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
                 let res = h.handle M.e c in
                 (* destroying the "continuation" (in case it has not been consumed) *)
                 (* let () = Thread.kill c.thread in *)
-                (* but Invalid_argument("Thread.kill: not implemented") *)
+                (* Hmmm... I get Invalid_argument("Thread.kill: not implemented") *)
                 res
 
   in
