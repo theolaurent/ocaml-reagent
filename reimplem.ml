@@ -6,7 +6,7 @@
  * Usage :
  * tryeff (function perform -> ... [some code] ... perform Effect ... [some code] ...)
           (function Effect k -> ... [the handler] ...
-                  | e -> raise Unhandled [or] perform e if there is any perfom function available
+                  | e -> raise Unhandled [or] perform e [if there is any perfom function available]
  *)
 
 type _ eff = ..
