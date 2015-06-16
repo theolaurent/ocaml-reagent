@@ -6,11 +6,19 @@
  * The Mvar module has been borrowed here : https://github.com/johnelse/ocaml-mvar.
  *
  * Usage :
- * tryeff (function () -> ... [some code] ... perform Effect ... [some code] ...)
-          (function Effect k -> ... [the handler] ...
-                  | e -> raise Unhandled [or] perform e [if there is any perfom function available]
+ * let h (type u) (x:u eff) (k:(u, 'b) cont) : 'b = match x with
+ *   | Effect -> [... some code ...]
+ *   | _ -> continue k (perform x)
  *
- * I am just not very shure about what would happen with several handlers interacting
+ * tryeff (function () -> ... [some code] ... perform Effect ... [some code] ...)
+ *        { handle = h }
+ *
+ * These "continuations" are clearly one-shot, but there is no second-call detection,
+ * that might create problems.
+ *
+ * I think there might be a problem with multiple threads on user-side. If a user use this library
+ * and multiple threads, I think the sharing of the stack might be a problem.
+ *
  *)
 
 
@@ -28,30 +36,47 @@ module type effect = sig
   type t
   val e : t eff
   val mvar_ret : t Mvar.t
+  val thread : Thread.t
 end
 type effect = (module effect)
 
-let eff_param : effect option Mvar.t = Mvar.create_empty ()
+(* stack of mvar for effect to be trnasmitted *)
+(* should be protected by a mutex ? *)
+let stack : effect option Mvar.t Stack.t = Stack.create ()
 
 let perform (type u) (a:u eff) =
   let module M = struct
     type t = u
     let e = a
     let mvar_ret =  Mvar.create_empty ()
+    let thread = Thread.self ()
   end in
-  let () = Mvar.put eff_param (Some (module M : effect)) in
-  Mvar.take M.mvar_ret
+  try
+    let mv = Stack.pop stack in
+    let () = Mvar.put mv (Some (module M : effect)) in
+    let res = Mvar.take M.mvar_ret in
+    let () = Stack.push mv stack (* is it the right place ? *) in
+    res
+
+  with _ -> raise Unhandled
 
 type 'b handler = { handle : 'a . 'a eff -> ('a, 'b) cont -> 'b }
 
 
 let tryeff (f : unit -> 'b) (h : 'b handler) : 'b =
+  let mv = Mvar.create_empty () in
+  let () = Stack.push mv stack in
   let t = Resthread.create (fun () -> let r = f () in
-                                      let () = Mvar.put eff_param None in
+                                      let () = Mvar.put mv None in
                                       r) ()
   in
-  let rec loop () = match Mvar.take eff_param with
+  let rec loop () = match Mvar.take mv with
     | None -> Resthread.get_result t
     | Some e -> let module M : effect = (val e) in
-                h.handle M.e { eff_return = M.mvar_ret ; resume_waiting = loop }
+                let res = h.handle M.e { eff_return = M.mvar_ret ; resume_waiting = loop } in
+                (* destroying the "continuation" (in case it has not been consumed) *)
+                (* let () = Thread.kill M.thread in *)
+                (* but Invalid_argument("Thread.kill: not implemented") *)
+                res
+
   in loop ()

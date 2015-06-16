@@ -16,7 +16,7 @@ let f () =
 let h (type u) (x:u eff) (k:(u, 'b) cont) : 'b = match x with
   | OfInt i -> continue k i
   | OfString s -> continue k (int_of_string s)
-  | _ -> raise Unhandled
+  | _ -> continue k (perform x)
 
 let h1 (type u) (x:u eff) (k:(u, 'b) cont) : 'b = match x with
   | OfString s -> continue k (int_of_string s)
