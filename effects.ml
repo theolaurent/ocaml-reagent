@@ -57,20 +57,12 @@ let perform (type u) (a:u eff) =
     let mvar_ret =  Mvar.create_empty ()
   end in
   try
-    (* Poping the current handler's mvar.   *
-     * Is it the right place ?              *)
-    let mv = Stack.pop stack in
+    (* Getting the current handler's mvar.  *)
+    let mv = Stack.top stack in
     (* Calling the handler through the mvar *)
     let () = Mvar.put mv (Some (module M : effect)) in
-    (* And waiting for its response *)
+    (* And waiting for its response         *)
     let res = Mvar.take M.mvar_ret in
-    (* Pushing the mvar backr.              *
-     * Again, is it the right place ?       *
-     * TODO: I think I have a problem when  *
-     * the handler does not call the        *
-     * continuation, the mvar won't be      *
-     * pushed back...                       *)
-    let () = Stack.push mv stack  in
     begin match res with
     | `Res x -> x
     | `Exn e -> raise e
@@ -101,13 +93,17 @@ let handle h f x =
                     | `Exn e -> h.exn e
                     | `BrutalFailure -> failwith "One thread failed very brutally"
               end
-    | Some e -> (* creating the "continuation"               *)
+    | Some e -> (* Pop the current handler for eventual others effects to be performed *)
+                let mv' = Stack.pop stack in
+                let () = assert (mv = mv') in (* current handler should be this one    *)
+                (* creating the "continuation"               *)
                 let module M : effect = (val e) in
                 let c = { eff_return     = Some M.mvar_ret ;
                           thread         = ThreadWithRes.get_thread t  ;
                           resume_waiting = loop            } in
                 (* handling the effect e                     *)
                 let res = h.eff M.e c in
+                let () = Stack.push mv stack in
                 (* destroying the "continuation" (in case it has not been consumed) *)
                 (* let () = Thread.kill c.thread in                                 *)
                 (* Hmmm... I get Invalid_argument("Thread.kill: not implemented")   *)
