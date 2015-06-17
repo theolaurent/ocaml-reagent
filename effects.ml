@@ -8,9 +8,9 @@
  * This module interface is identical to the one of the effects module of
  * ocaml multicore. It only misses the syntactic sugar !
  *
- * TODO : I think there might be a problem with multiple threads on user-side.
- *  If a user use this library
- * and multiple threads, I think the sharing of the stack might be a problem.
+ * TODO: I think there might be a problem with multiple threads on user-side.
+ *       If a user use this library and multiple threads,
+ *       I think the sharing of the stack might be a problem.
  *
  *)
 
@@ -42,11 +42,11 @@ module type effect = sig
   type t
   val e : t eff
   val mvar_ret : [`Res of t | `Exn of exn] Mvar.t (* the one-shot thing should in fact *
-                           * be enforced here !                *)
+                                                   * be enforced here !                *)
 end
 type effect = (module effect)
 
-(* stack of mvar for effect to be trnasmitted *)
+(* stack of mvar for effect to be transmitted *)
 (* should be protected by a mutex ? *)
 let stack : effect option Mvar.t Stack.t = Stack.create ()
 
@@ -57,15 +57,25 @@ let perform (type u) (a:u eff) =
     let mvar_ret =  Mvar.create_empty ()
   end in
   try
-    let mv = Stack.pop stack     (* is it the right place ? *) in
+    (* Poping the current handler's mvar.   *
+     * Is it the right place ?              *)
+    let mv = Stack.pop stack in
+    (* Calling the handler through the mvar *)
     let () = Mvar.put mv (Some (module M : effect)) in
+    (* And waiting for its response *)
     let res = Mvar.take M.mvar_ret in
-    let () = Stack.push mv stack (* is it the right place ? *) in
-    match res with
+    (* Pushing the mvar backr.              *
+     * Again, is it the right place ?       *
+     * TODO: I think I have a problem when  *
+     * the handler does not call the        *
+     * continuation, the mvar won't be      *
+     * pushed back...                       *)
+    let () = Stack.push mv stack  in
+    begin match res with
     | `Res x -> x
     | `Exn e -> raise e
-
-  with _ -> raise Unhandled
+    end
+  with Stack.Empty -> raise Unhandled
 
 type ('b, 'c) handler = { eff    : 'a . 'a eff -> ('a, 'c) continuation -> 'c ;
                           exn    : exn -> 'c                                  ;
@@ -73,30 +83,38 @@ type ('b, 'c) handler = { eff    : 'a . 'a eff -> ('a, 'c) continuation -> 'c ;
 
 
 let handle h f x =
+  (* Creating the handler's mvar and pushing it on the stack *)
   let mv = Mvar.create_empty () in
   let () = Stack.push mv stack in
+  (* Spawning the function f in a new thread                 *)
   let t = ThreadWithRes.spawn (fun () -> let r = f x in
                                       let () = Mvar.put mv None in
                                       r) ()
   in
+  (* Handling eventual performing of effects                 *
+   * Some e stand for an effect ; None means the function f  *
+   * terminates                                              *)
   let rec loop () = match Mvar.take mv with
-    | None -> begin match ThreadWithRes.get_result t with
+    | None -> (* get the result of f and handle it           *)
+              begin match ThreadWithRes.get_result t with
                     | `Res x -> h.return x
                     | `Exn e -> h.exn e
                     | `BrutalFailure -> failwith "One thread failed very brutally"
               end
-    | Some e -> let module M : effect = (val e) in
-                (* creating the continuation *)
+    | Some e -> (* creating the "continuation"               *)
+                let module M : effect = (val e) in
                 let c = { eff_return     = Some M.mvar_ret ;
                           thread         = ThreadWithRes.get_thread t  ;
                           resume_waiting = loop            } in
+                (* handling the effect e                     *)
                 let res = h.eff M.e c in
                 (* destroying the "continuation" (in case it has not been consumed) *)
-                (* let () = Thread.kill c.thread in *)
-                (* Hmmm... I get Invalid_argument("Thread.kill: not implemented") *)
+                (* let () = Thread.kill c.thread in                                 *)
+                (* Hmmm... I get Invalid_argument("Thread.kill: not implemented")   *)
                 res
-
-  in try
+  in
+  (* Return the final result while making sure the handler's mvar is poped *)
+  try
     let res = loop () in
     let _ = Stack.pop stack in
     res
