@@ -14,11 +14,11 @@ let f () =
 
 let h1 (type u) (x:u eff) (k:(u, 'b) continuation) : 'b = match x with
   | OfString s -> continue k (int_of_string s)
-  | _ -> continue k (perform x)
+  | _ -> delegate x k
 
 let h2 (type u) (x:u eff) (k:(u, 'b) continuation) : 'b = match x with
   | OfInt i -> continue k i
-  | _ -> continue k (perform x)
+  | _ -> delegate x k
 
 
 let _ =
