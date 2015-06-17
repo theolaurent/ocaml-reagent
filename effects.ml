@@ -95,14 +95,15 @@ let handle h f x =
               end
     | Some e -> (* Pop the current handler for eventual others effects to be performed *)
                 let mv' = Stack.pop stack in
-                let () = assert (mv = mv') in (* current handler should be this one    *)
-                (* creating the "continuation"               *)
+                let () = assert (mv = mv') in  (* current handler should be this one   *)
+                (* Create the "continuation"    *)
                 let module M : effect = (val e) in
                 let c = { eff_return     = Some M.mvar_ret ;
                           thread         = ThreadWithRes.get_thread t  ;
                           resume_waiting = loop            } in
-                (* handling the effect e                     *)
+                (* Handle the effect e          *)
                 let res = h.eff M.e c in
+                (* Push the handler's mvar back *)
                 let () = Stack.push mv stack in
                 (* destroying the "continuation" (in case it has not been consumed) *)
                 (* let () = Thread.kill c.thread in                                 *)
