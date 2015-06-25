@@ -14,16 +14,15 @@ module Make (Sc: SCHED) = struct
     type ('a, 'b) t = ('a * 'b Sc.cont) option ref
     exception AlreadyFulfilledOffer
     let make v k = ref (Some (v, k))
-    let fulfill o = match !o with
+    let set_fulfilled o = match !o with
       | None -> raise AlreadyFulfilledOffer
       | Some (x, k) -> ( o := None ; (x, k) )
     let is_fulfilled o = match !o with
       | None -> false
       | Some _ -> true
     let rec clean_queue q =
-      match !(Queue.top q) with
-      | Some _ -> ()
-      | None -> ignore (Queue.pop q) ; clean_queue q
+      if is_fulfilled (Queue.top q)
+      then ( ignore (Queue.pop q) ; clean_queue q )
   end
 
   module Events = struct
@@ -34,6 +33,10 @@ module Make (Sc: SCHED) = struct
         block : 'a -> 'b Sc.cont -> unit ;
       }
 
+    let sync x v = match x.tryDo v with
+      | Some r -> r
+      | None -> suspend (x.block v)
+
     let choose x y =
       let tryDo v = match x.tryDo v with
         | Some r -> Some r
@@ -43,13 +46,7 @@ module Make (Sc: SCHED) = struct
       in { tryDo ; block }
   end
 
-  module Mvar : sig
-    type 'a mvar
-    val new_mvar       : 'a -> 'a mvar
-    val new_empty_mvar : unit -> 'a mvar
-    val put_mvar_evt   : 'a mvar -> ('a, unit) Events.t
-    (* val take_mvar_evt  : 'a mvar -> (unit, 'a) Events.t *)
-  end = struct
+  module Mvar = struct
 
     type 'a mv_state =
       | Full  of 'a * (('a ,unit) Offer.t Queue.t)
@@ -69,7 +66,7 @@ module Make (Sc: SCHED) = struct
                               mv := Full (v, Queue.create ())
                             else
                               let o = Queue.pop q in
-                              let ((), k) = Offer.fulfill o in
+                              let ((), k) = Offer.set_fulfilled o in
                               resume k v )
       in
       let block v = match !mv with
@@ -85,7 +82,7 @@ module Make (Sc: SCHED) = struct
                              mv := Empty (Queue.create ())
                            else
                              let o = Queue.pop q in
-                             let (v', k) = Offer.fulfill o in
+                             let (v', k) = Offer.set_fulfilled o in
                              mv := Full (v', q) ;
                              resume k ()
                          ) ;
