@@ -1,5 +1,5 @@
 module type SCHED = sig
-  type -'a cont
+  type 'a cont
   effect Suspend : ('a cont -> unit) -> 'a
   effect Resume : 'a cont * 'a -> unit
 end
@@ -17,7 +17,7 @@ module Make : functor (Sc : SCHED) -> sig
 
   module Events :
     sig
-      type (-'a, +'b) t
+      type ('a, 'b) t
       val sync : ('a, 'b) t -> 'a -> 'b
       val choose : ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
     end

@@ -1,6 +1,6 @@
 
 module type SCHED = sig
-  type -'a cont
+  type 'a cont
   effect Suspend : ('a cont -> unit) -> 'a
   effect Resume  : 'a cont * 'a -> unit
 end
@@ -27,23 +27,32 @@ module Make (Sc: SCHED) = struct
 
   module Events = struct
 
-    type (-'a, +'b) t = {
+    (* TODO : variance annotations *)
+    type ('a, 'b) t = {
+        (* tryDo returns None when the reaction can't take place.     *)
+        (* For the moment it is monothread non-preemptive concurency, *)
+        (* so no need for transient failures                          *)
         tryDo : 'a -> 'b option  ;
-        (* block is supposed to be called only when tryDo returns None *)
-        block : 'a -> 'b Sc.cont -> unit ;
+        (* withOffer returns None when the give offer have already    *)
+        (* been fulfilled.                                            *)
+        (*   ('a, 'b) Offer.t -> unit   ~~~   'a -> 'b cont -> unit   *)
+        (* for now, it is assumed that withOffer is only called when  *)
+        (* tryDo returns None.                                        *)
+        withOffer : ('a, 'b) Offer.t -> unit ;
       }
 
     let sync x v = match x.tryDo v with
       | Some r -> r
-      | None -> suspend (x.block v)
+      | None -> suspend (fun k -> let o = Offer.make v k in
+                                  x.withOffer o)
 
     let choose x y =
       let tryDo v = match x.tryDo v with
         | Some r -> Some r
         | None -> y.tryDo v
       in
-      let block v k = failwith "unimplemented"
-      in { tryDo ; block }
+      let withOffer o = x.withOffer o ; y.withOffer o
+      in { tryDo ; withOffer }
   end
 
   module Mvar = struct
@@ -69,10 +78,10 @@ module Make (Sc: SCHED) = struct
                               let ((), k) = Offer.set_fulfilled o in
                               resume k v )
       in
-      let block v = match !mv with
-        | Empty _ -> assert false
-        | Full (_, q) -> (fun k -> Queue.push (Offer.make v k) q)
-      in { Events.tryDo = tryDo ; Events.block = block }
+      let withOffer o = match !mv with
+        | Empty _ -> assert false (* due to assumption that tryDo retuned None *)
+        | Full (_, q) -> Queue.push o q
+      in { Events.tryDo = tryDo ; Events.withOffer = withOffer }
 
     let take_mvar_evt mv =
       let tryDo () = match !mv with
@@ -88,9 +97,9 @@ module Make (Sc: SCHED) = struct
                          ) ;
                          Some v
       in
-      let block () = match !mv with
-        | Full _ -> assert false
-        | Empty q -> (fun k -> Queue.push (Offer.make () k) q)
-      in { Events.tryDo = tryDo ; Events.block = block }
+      let withOffer o = match !mv with
+        | Full _ -> assert false (* due to assumption that tryDo retuned None *)
+        | Empty q -> Queue.push o q
+      in { Events.tryDo = tryDo ; Events.withOffer = withOffer }
   end
 end
