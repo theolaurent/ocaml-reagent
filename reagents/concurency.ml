@@ -33,8 +33,8 @@ module Make (Sc: SCHED) = struct
         (* For the moment it is monothread non-preemptive concurency, *)
         (* so no need for transient failures                          *)
         tryDo : 'a -> 'b option  ;
-        (* withOffer returns None when the give offer have already    *)
-        (* been fulfilled.                                            *)
+        (* withOffer shall store the offer somewhere it will be found *)
+        (* by another reactant.                                       *)
         (*   ('a, 'b) Offer.t -> unit   ~~~   'a -> 'b cont -> unit   *)
         (* for now, it is assumed that withOffer is only called when  *)
         (* tryDo returns None.                                        *)
