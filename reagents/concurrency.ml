@@ -18,10 +18,10 @@ module Make (Sc: SCHED) = struct
       | None -> raise AlreadyFulfilledOffer
       | Some (x, k) -> ( o := None ; (x, k) )
     let is_fulfilled o = match !o with
-      | None -> false
-      | Some _ -> true
+      | None -> true
+      | Some _ -> false
     let rec clean_queue q =
-      if is_fulfilled (Queue.top q)
+      if not (Queue.is_empty q) && is_fulfilled (Queue.top q)
       then ( ignore (Queue.pop q) ; clean_queue q )
   end
 
