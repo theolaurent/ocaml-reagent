@@ -15,10 +15,11 @@ val commit : t -> bool
 
 val kCAS : t list -> bool
 
-module Sugar :
-  sig
-    type 'a casref_update
-    val ( ! ) : 'a ref -> 'a
-    val ( --> ) : 'a -> 'a -> 'a casref_update
-    val ( := ) : 'a ref -> 'a casref_update -> t
-  end
+
+module Sugar : sig
+  type 'a casref_update
+  val (!) : 'a ref -> 'a
+  val (-->) : 'a -> 'a -> 'a casref_update
+  val (<!=) : 'a ref -> 'a casref_update -> bool
+  val (<:=) : 'a ref -> 'a casref_update -> t
+end

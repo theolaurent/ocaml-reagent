@@ -73,9 +73,10 @@ let kCAS l =
 
 module Sugar : sig
   type 'a casref_update
-  val ( ! ) : 'a ref -> 'a
-  val ( --> ) : 'a -> 'a -> 'a casref_update
-  val ( := ) : 'a ref -> 'a casref_update -> t
+  val (!) : 'a ref -> 'a
+  val (-->) : 'a -> 'a -> 'a casref_update
+  val (<!=) : 'a ref -> 'a casref_update -> bool
+  val (<:=) : 'a ref -> 'a casref_update -> t
 end = struct
   type 'a casref_update = { ov : 'a ;
                             nv : 'a }
@@ -83,5 +84,6 @@ end = struct
 
   let (-->) ov nv = { ov ; nv }
 
-  let (:=) r { ov ; nv } = build r ~ov ~nv
+  let (<!=) r { ov ; nv } = docas r ~ov ~nv
+  let (<:=) r { ov ; nv } = build r ~ov ~nv
 end
