@@ -14,6 +14,7 @@ module Sugar : sig
   val ( := ) : 'a ref -> 'a casref_update -> bool
 end
 
-type 'a atom = { ov : 'a; nv : 'a; r : 'a ref; }
+type atom
+val build_atom : 'a ref -> ov:'a -> nv:'a -> atom
 
-val kCAS : 'a atom list -> bool
+val kCAS : atom list -> bool

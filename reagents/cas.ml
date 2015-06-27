@@ -1,4 +1,6 @@
 
+(* TODO: afterCAS actions!! *)
+
 type 'a refstate =
   | Normal of 'a
   | OnGoingKCAS of 'a (* store the old value *)
@@ -36,13 +38,25 @@ end = struct
 end
 
 module KCAS : sig
-  type 'a atom = { ov : 'a; nv : 'a; r : 'a ref; }
-  val kCAS : 'a atom list -> bool
+  type atom
+  val build_atom : 'a ref -> ov:'a -> nv:'a -> atom
+  val kCAS : atom list -> bool
 end = struct
 
-  type 'a atom = { ov : 'a ; nv : 'a ; r : 'a ref }
+  (* Isn't that heavy at runtime? OCaml should definetly have existentials. *)
+  type 'a atom_struct = { ov : 'a ; nv : 'a ; r : 'a ref }
+  module type atom = sig type t val it : t atom_struct end
+  type atom = (module atom)
 
-  let semicas { r ; ov ; _ } =
+  let build_atom (type u) (r:u ref) ~(ov:u) ~(nv:u) =
+    let module M = struct
+        type t = u
+        let it = { ov ; nv ; r }
+      end in (module M : atom)
+
+  let semicas cas =
+    let module M = (val cas : atom) in
+    let { r ; ov ; _ } = M.it in
     (* lock? *)
     match r.content with
     | Normal x when x = ov -> ( r.content <- OnGoingKCAS x ; true )
@@ -50,14 +64,18 @@ end = struct
     (* unlock? *)
 
   (* only the tread that perform the semicas should be able to rollbwd/fwd *)
-  let rollbwd { r ; _ } =
+  let rollbwd cas =
+    let module M = (val cas : atom) in
+    let { r ; _ } = M.it in
     (* lock? *)
     match r.content with
     | Normal _ -> assert false
     | OnGoingKCAS x -> r.content <- Normal x
     (* unlock? *)
 
-  let rollfwd { r ; nv ; ov } =
+  let rollfwd cas =
+    let module M = (val cas : atom) in
+    let { r ; nv ; ov } = M.it in
     (* lock? *)
     match r.content with
     | Normal _ -> assert false
