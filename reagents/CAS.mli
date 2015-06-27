@@ -18,8 +18,10 @@ val kCAS : t list -> bool
 
 module Sugar : sig
   type 'a casref_update
-  val (!) : 'a ref -> 'a
+  type 'a casref = 'a ref
+  val ref : 'a -> 'a casref
+  val (!) : 'a casref -> 'a
   val (-->) : 'a -> 'a -> 'a casref_update
-  val (<!=) : 'a ref -> 'a casref_update -> bool
-  val (<:=) : 'a ref -> 'a casref_update -> t
+  val (<!=) : 'a casref -> 'a casref_update -> bool
+  val (<:=) : 'a casref -> 'a casref_update -> t
 end

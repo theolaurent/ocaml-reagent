@@ -73,13 +73,17 @@ let kCAS l =
 
 module Sugar : sig
   type 'a casref_update
-  val (!) : 'a ref -> 'a
+  type 'a casref = 'a ref
+  val ref : 'a -> 'a casref
+  val (!) : 'a casref -> 'a
   val (-->) : 'a -> 'a -> 'a casref_update
-  val (<!=) : 'a ref -> 'a casref_update -> bool
-  val (<:=) : 'a ref -> 'a casref_update -> t
+  val (<!=) : 'a casref -> 'a casref_update -> bool
+  val (<:=) : 'a casref -> 'a casref_update -> t
 end = struct
   type 'a casref_update = { ov : 'a ;
                             nv : 'a }
+  type 'a casref = 'a ref
+  let ref x = ref x
   let (!) r = get r
 
   let (-->) ov nv = { ov ; nv }

@@ -1,6 +1,5 @@
 
-open CAS
-open Sugar
+open CAS.Sugar
 
 type 'a status =
   | Waiting
@@ -11,7 +10,7 @@ type 'a status =
 (* The thread is suposed to be resumed only once, and when *)
 (* the offer has been completed.                           *)
 (* Also, all completed offer should be waken at some point *)
-type 'a t = { state : 'a status ref ; thread : 'a Sched.cont }
+type 'a t = { state : 'a status casref ; thread : 'a Sched.cont }
 
 let make k = { state = ref Waiting ; thread = k }
 
