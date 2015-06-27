@@ -71,3 +71,5 @@ end = struct
       ( List.iter rollbwd l ; false )
 
 end
+
+include KCAS
