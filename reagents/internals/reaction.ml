@@ -2,7 +2,7 @@
 open CAS.Sugar
 
 type t = {
-    cas_list : CAS.t list ;
+    cas_list : CAS.abstract_t list ;
     (* TODO: the offer thing? *)
     pc_list  : (unit -> unit) list ;
   }

@@ -7,13 +7,13 @@ val get : 'a ref -> 'a
 
 val docas : 'a ref -> ov:'a -> nv:'a -> bool
 
-type t
+type abstract_t
 
-val build : 'a ref -> ov:'a -> nv:'a -> t
+val build : 'a ref -> ov:'a -> nv:'a -> abstract_t
 
-val commit : t -> bool
+val commit : abstract_t -> bool
 
-val kCAS : t list -> bool
+val kCAS : abstract_t list -> bool
 
 
 module Sugar : sig
@@ -23,5 +23,5 @@ module Sugar : sig
   val (!) : 'a casref -> 'a
   val (-->) : 'a -> 'a -> 'a casref_update
   val (<!=) : 'a casref -> 'a casref_update -> bool
-  val (<:=) : 'a casref -> 'a casref_update -> t
+  val (<:=) : 'a casref -> 'a casref_update -> abstract_t
 end

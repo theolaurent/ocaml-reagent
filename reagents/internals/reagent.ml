@@ -16,15 +16,12 @@ let run r a =
 
 
 let commit : ('a, 'a) t =
-  let tryReact a rx offer =
-    let () = match offer with
-      | None -> ()
-      | Some o -> if Offer.try_abort o then ()
-                  else failwith "Reagent.commit: I have to think about this case..."
-    in
-    if Reaction.try_commit rx then
-      Some a
-    else failwith "Reagent.commit: that shouldn't happen yet, no parallelism."
+  let tryReact a rx offer = match offer with
+    | Some o when Offer.try_complete o a
+        -> failwith ".........."
+    | _ -> if Reaction.try_commit rx then
+             Some a
+           else failwith "Reagent.commit: that shouldn't happen yet, no parallelism."
   in
   let composeI (type b) (r:('a, b) t) = r
   in { tryReact ; composeI }
