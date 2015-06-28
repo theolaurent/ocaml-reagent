@@ -22,23 +22,23 @@ let docas r ~ov ~nv =
   (* unlock? *)
 
 (* Isn't that heavy at runtime? OCaml should definetly have existentials. *)
-type 'a t_struct = { ov : 'a ; nv : 'a ; r : 'a ref }
-module type t = sig type t val it : t t_struct end
-type t = (module t)
+type 'a t = { ov : 'a ; nv : 'a ; r : 'a ref }
+module type abstract_t = sig type u val it : u t end
+type abstract_t = (module abstract_t)
 
-let build (type u) (r:u ref) ~(ov:u) ~(nv:u) =
+let build (type v) (r:v ref) ~(ov:v) ~(nv:v) =
   let module M = struct
-      type t = u
+      type u = v
       let it = { ov ; nv ; r }
-    end in (module M : t)
+    end in (module M : abstract_t)
 
 let commit cas =
-  let module M = (val cas : t) in
+  let module M = (val cas : abstract_t) in
   let { r ; ov ; nv } = M.it in
   docas r ~ov ~nv
 
 let semicas cas =
-  let module M = (val cas : t) in
+  let module M = (val cas : abstract_t) in
   let { r ; ov ; _ } = M.it in
   (* lock? *)
   match r.content with
@@ -48,7 +48,7 @@ let semicas cas =
 
 (* only the tread that perform the semicas should be able to rollbwd/fwd *)
 let rollbwd cas =
-  let module M = (val cas : t) in
+  let module M = (val cas : abstract_t) in
   let { r ; _ } = M.it in
   (* lock? *)
   match r.content with
@@ -57,7 +57,7 @@ let rollbwd cas =
   (* unlock? *)
 
 let rollfwd cas =
-  let module M = (val cas : t) in
+  let module M = (val cas : abstract_t) in
   let { r ; nv ; ov } = M.it in
   (* lock? *)
   match r.content with
@@ -73,15 +73,21 @@ let kCAS l =
 
 module Sugar : sig
   type 'a casref_update
-  val ( ! ) : 'a ref -> 'a
-  val ( --> ) : 'a -> 'a -> 'a casref_update
-  val ( := ) : 'a ref -> 'a casref_update -> t
+  type 'a casref = 'a ref
+  val ref : 'a -> 'a casref
+  val (!) : 'a casref -> 'a
+  val (-->) : 'a -> 'a -> 'a casref_update
+  val (<!=) : 'a casref -> 'a casref_update -> bool
+  val (<:=) : 'a casref -> 'a casref_update -> abstract_t
 end = struct
   type 'a casref_update = { ov : 'a ;
                             nv : 'a }
+  type 'a casref = 'a ref
+  let ref x = ref x
   let (!) r = get r
 
   let (-->) ov nv = { ov ; nv }
 
-  let (:=) r { ov ; nv } = build r ~ov ~nv
+  let (<!=) r { ov ; nv } = docas r ~ov ~nv
+  let (<:=) r { ov ; nv } = build r ~ov ~nv
 end
