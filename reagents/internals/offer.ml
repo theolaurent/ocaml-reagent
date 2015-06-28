@@ -3,7 +3,6 @@ open CAS.Sugar
 
 type 'a status =
   | Waiting
-(*| Aborted*) (* not possible with our contuinuations ? *)
   | Completed of 'a
   | WakedUp
 
@@ -20,13 +19,6 @@ let wake o () =
   | Completed v when o.state <!= s --> WakedUp
       -> perform (Sched.Resume (o.thread, v))
   | _ -> assert false
-
-(*
-let try_abort o = o.state <!= Waiting --> Aborted
-
-let rx_with_abort o rx =
-  Reaction.add_cas rx o.state ~ov:Waiting ~nv:Aborted
-*)
 
 (* completion does not wake up yet *)
 let try_complete o a = o.state <!= Waiting --> Completed a

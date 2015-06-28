@@ -3,14 +3,12 @@ open CAS.Sugar
 
 type t = {
     cas_list : CAS.abstract_t list ;
-    (* TODO: the offer thing? *)
     pc_list  : (unit -> unit) list ;
   }
 
 let inert = { cas_list = [] ;
               pc_list  = [] }
 
-(* TODO: no order problems?? *)
 let add_cas rx r ~ov ~nv = { rx with cas_list = (r <:= ov --> nv) :: rx.cas_list }
 let add_pc rx f = { rx with pc_list = f :: rx.pc_list }
 

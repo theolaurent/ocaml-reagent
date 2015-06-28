@@ -1,61 +1,82 @@
 
-type ('a, 'b) t = {
-    tryReact : 'a -> Reaction.t -> 'b Offer.t option -> 'b option ; (* None stands for Block *)
-    composeI : 'c . ('b, 'c) t -> ('a, 'c) t ;
-  }
-
-(* for the moment just try without and then with offer; cf scala implem (canSync...) *)
-
-let compose r1 r2 = r1.composeI r2
-
-let run r a =
-  match r.tryReact a Reaction.inert None with
-  (* for now, no retry, cf scala code *)
-  | None -> perform (Sched.Suspend (fun k -> ignore (r.tryReact a Reaction.inert (Some (Offer.make k)))))
-  | Some x -> x
+type 'a result =
+  | Imm of 'a
+  | WithOffer of ('a Offer.t -> unit)
 
 
-let commit : ('a, 'a) t =
-  let tryReact a rx offer = match offer with
-    | Some o when Offer.try_complete o a
-        -> failwith ".........."
-    | _ -> if Reaction.try_commit rx then
-             Some a
-           else failwith "Reagent.commit: that shouldn't happen yet, no parallelism."
-  in
-  let composeI (type b) (r:('a, b) t) = r
-  in { tryReact ; composeI }
+(* recursive module trick to get a mutualy recursive type definition with *)
+(* an first class module ; all that mess for an existential type [...]    *)
+module rec M : sig
+  module type t_cont = sig type u type v type z val it : (u, z, v) M.t end
 
-(*
-let rec never () =
-  let tryReact a rx offer =
-    None
-  in
-(*let composeI (type c) (r:(u, c) t) = never () *)
-(*in { tryReact ; composeI } *)
-  let composeI = (fun _ -> never ())
-  in { tryReact ; composeI = Obj.magic composeI }
-*)
+  type ('a, 'b, 'c) t = { tryReact : arg:'a -> rx:Reaction.t -> next: ('b, 'c) t_cont -> 'c result }
+  and ('a, 'b) t_cont = (module t_cont with type u = 'a and type v = 'b)
+end = struct
+  module type t_cont = sig type u type v type z val it : (u, z, v) M.t end
 
-let rec choice (r1:('a, 'b) t) (r2:('a, 'b) t) =
-  let tryReact a rx offer =
-    match r1.tryReact a rx offer with
-    | None -> r2.tryReact a rx offer
-    | Some x -> Some x
-  in
-(*let compose (type c) (r:('b, c) t) = *)
-(*  (* hmm what is this case Choice thing in the scala code? *) *)
-(*  choice (r1.composeI r) (r2.composeI r) *)
-(*in { tryReact ; composeI } *)
-  let composeI = (fun r -> choice (r1.composeI r) (r2.composeI r))
-  in { tryReact ; composeI = Obj.magic composeI }
+  type ('a, 'b, 'c) t = { tryReact : arg:'a -> rx:Reaction.t -> next: ('b, 'c) t_cont -> 'c result }
+  and ('a, 'b) t_cont = (module t_cont with type u = 'a and type v = 'b)
+end
 
-(* TODO: post commit => what is this auto cont thing? *)
+include M
 
+let t_embed (type u1) (type v1) (type z1) (r:(u1, z1, v1) t) =
+  let module M = struct
+      type u = u1
+      type v = v1
+      type z = z1
+      let it = r
+    end in ((module M) : (u1, v1) t_cont)
+
+
+(* TODO: redo that one *) (*
 (* moved from offer.ml to avoid circular dependencies *)
-let comsume_and_continue o complete_with continue_with rx k enclosing_offer =
+let comsume_and_continue o v ctx =
   (* forgetting the immediate CAS for now; cf scala implem *)
-  let new_rx = Reaction.add_pc (Offer.rx_with_completion o rx complete_with)
+  let new_rx = Reaction.add_pc (Offer.rx_with_completion o ctx.rx v)
                                (Offer.wake o) in
   (* for now, only blocking ones; cf scala implem *)
-  k.tryReact continue_with new_rx enclosing_offer
+  ctx.next.tryReact { ctx with rx = new_rx }
+  *)
+
+let rec commit : ('a, 'a, 'a) t =
+  let tryReact (type u) ~arg ~rx ~(next:(u, u) t_cont) =
+    let module M = (val next) in
+    let next = M.it in
+    let () = assert (Obj.magic next = commit) ; (* there are way to enforce that at type-level ! *)
+             ( if Reaction.try_commit rx then ()
+               else failwith "No transient failure for now" )
+    in Imm arg
+  in { tryReact }
+
+(* for the moment just try without and then with offer; cf scala implem (canSync...) *)
+let run r arg =
+  match r.tryReact ~arg ~rx:Reaction.inert ~next:(t_embed commit) with
+  (* for now, no retry, cf scala code *)
+  | Imm x -> x
+  | WithOffer f -> perform (Sched.Suspend (fun k -> f (Offer.make k)))
+
+
+let pipe r1 r2 =
+  let rec aux (type u) (type v) r (next:(u, v) t_cont) =
+    let module M = (val next) in
+    let thenext = M.it in
+    (* let tryReact ~arg ~rx ~next = r.tryReact ~arg ~rx ~next:(aux thenext next) in *)
+    let tryReact ~arg ~rx ~next = r.tryReact ~arg ~rx ~next:(aux (Obj.magic thenext) next) in
+    t_embed { tryReact }
+  in aux r1 (t_embed r2)
+
+
+let rec choice r1 r2 =
+  let tryReact ~arg ~rx ~next = match r1.tryReact arg rx next with
+    | WithOffer f -> begin match r2.tryReact arg rx next with
+                           | WithOffer g -> WithOffer (fun o -> f o ; g o)
+                           | Imm a -> Imm a
+                     end
+    | Imm a -> Imm a
+  in { tryReact }
+
+let rec never () =
+  let tryReact ~arg ~rx ~next =
+    WithOffer (fun _ -> ()) (* be careful, will the maybe no-more-referenced Sched.cont be deleted? *)
+  in { tryReact }
