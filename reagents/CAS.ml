@@ -72,7 +72,8 @@ let kCAS l =
     ( List.iter rollbwd l ; false )
 
 module Sugar : sig
-  type 'a casref_update
+  type 'a casref_update = { expect : 'a ;
+                            update : 'a }
   type 'a casref = 'a ref
   val ref : 'a -> 'a casref
   val (!) : 'a casref -> 'a
