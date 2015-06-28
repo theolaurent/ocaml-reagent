@@ -5,11 +5,11 @@ val ref : 'a -> 'a ref
 
 val get : 'a ref -> 'a
 
-val docas : 'a ref -> ov:'a -> nv:'a -> bool
+val docas : 'a ref -> expect:'a -> update:'a -> bool
 
 type abstract_t
 
-val build : 'a ref -> ov:'a -> nv:'a -> abstract_t
+val build : 'a ref -> expect:'a -> update:'a -> abstract_t
 
 val commit : abstract_t -> bool
 

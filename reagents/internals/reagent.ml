@@ -1,33 +1,18 @@
 
 type 'a result =
-  | Imm of 'a
+  | Final of 'a * Reaction.t
   | WithOffer of ('a Offer.t -> unit)
 
+type ('a, 'b, 'r) t =
+  { tryReact : 'c . arg:'a -> rx:Reaction.t -> next:('b, 'c, 'r) t option -> 'r result }
 
-(* recursive module trick to get a mutualy recursive type definition with *)
-(* an first class module ; all that mess for an existential type [...]    *)
-module rec M : sig
-  module type t_cont = sig type u type v type z val it : (u, z, v) M.t end
-
-  type ('a, 'b, 'c) t = { tryReact : arg:'a -> rx:Reaction.t -> next: ('b, 'c) t_cont -> 'c result }
-  and ('a, 'b) t_cont = (module t_cont with type u = 'a and type v = 'b)
-end = struct
-  module type t_cont = sig type u type v type z val it : (u, z, v) M.t end
-
-  type ('a, 'b, 'c) t = { tryReact : arg:'a -> rx:Reaction.t -> next: ('b, 'c) t_cont -> 'c result }
-  and ('a, 'b) t_cont = (module t_cont with type u = 'a and type v = 'b)
-end
-
-include M
-
-let t_embed (type u1) (type v1) (type z1) (r:(u1, z1, v1) t) =
-  let module M = struct
-      type u = u1
-      type v = v1
-      type z = z1
-      let it = r
-    end in ((module M) : (u1, v1) t_cont)
-
+(* TODO : test *)
+(* type ('a, 'b, 'r) t = *)
+(*   { tryReact : arg:'a -> rx:Reaction.t -> next:('b, 'r) cont -> 'r result } *)
+(* and ('a, 'b) cont = *)
+(*   | Nope : ('a, 'a) cont *)
+(*   | Next : ('a, 'b) t_hidden -> ('a, 'b) cont *)
+(* and ('a, 'b) t_hidden = { it : 'c . ('a, 'c, 'b) t } *)
 
 (* TODO: redo that one *) (*
 (* moved from offer.ml to avoid circular dependencies *)
@@ -39,41 +24,28 @@ let comsume_and_continue o v ctx =
   ctx.next.tryReact { ctx with rx = new_rx }
   *)
 
-let rec commit : ('a, 'a, 'a) t =
-  let tryReact (type u) ~arg ~rx ~(next:(u, u) t_cont) =
-    let module M = (val next) in
-    let next = M.it in
-    let () = assert (Obj.magic next = commit) ; (* there are way to enforce that at type-level ! *)
-             ( if Reaction.try_commit rx then ()
-               else failwith "No transient failure for now" )
-    in Imm arg
-  in { tryReact }
-
 (* for the moment just try without and then with offer; cf scala implem (canSync...) *)
 let run r arg =
-  match r.tryReact ~arg ~rx:Reaction.inert ~next:(t_embed commit) with
+  match r.tryReact ~arg ~rx:Reaction.inert ~next:None with
   (* for now, no retry, cf scala code *)
-  | Imm x -> x
+  | Final (x, rx) -> ( if Reaction.try_commit rx then x
+                       else failwith "No transient failure for now" )
   | WithOffer f -> perform (Sched.Suspend (fun k -> f (Offer.make k)))
 
 
-let pipe r1 r2 =
-  let rec aux (type u) (type v) r (next:(u, v) t_cont) =
-    let module M = (val next) in
-    let thenext = M.it in
-    (* let tryReact ~arg ~rx ~next = r.tryReact ~arg ~rx ~next:(aux thenext next) in *)
-    let tryReact ~arg ~rx ~next = r.tryReact ~arg ~rx ~next:(aux (Obj.magic thenext) next) in
-    t_embed { tryReact }
-  in aux r1 (t_embed r2)
+let rec pipe (r1:('a, 'b, 'r) t) (r2:('b, 'c, 'r) t) : ('a, 'c, 'r) t =
+  let tryReact (type u) ~arg ~rx ~(next:('c, u, 'r) t option) =
+    r1.tryReact ~arg ~rx ~next:(Some (pipe r2 (Obj.magic next))) (* TODO: solve this type problem *)
+  in { tryReact }
 
 
 let rec choice r1 r2 =
-  let tryReact ~arg ~rx ~next = match r1.tryReact arg rx next with
-    | WithOffer f -> begin match r2.tryReact arg rx next with
+  let tryReact ~arg ~rx ~next = match r1.tryReact ~arg ~rx ~next with
+    | WithOffer f -> begin match r2.tryReact ~arg ~rx ~next with
                            | WithOffer g -> WithOffer (fun o -> f o ; g o)
-                           | Imm a -> Imm a
+                           | Final (a, rx) -> Final (a, rx)
                      end
-    | Imm a -> Imm a
+    | Final (a, rx) -> Final (a, rx)
   in { tryReact }
 
 let rec never () =

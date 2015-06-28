@@ -9,7 +9,7 @@ type t = {
 let inert = { cas_list = [] ;
               pc_list  = [] }
 
-let add_cas rx r ~ov ~nv = { rx with cas_list = (r <:= ov --> nv) :: rx.cas_list }
+let add_cas rx r ~expect ~update = { rx with cas_list = (r <:= expect --> update) :: rx.cas_list }
 let add_pc rx f = { rx with pc_list = f :: rx.pc_list }
 
 let (++) r1 r2 = { cas_list = r1.cas_list @ r2.cas_list ;
