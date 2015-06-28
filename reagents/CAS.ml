@@ -14,35 +14,35 @@ let get r = match r.content with
   | OnGoingKCAS x -> x
 
 (* waiting for the hardware version *)
-let docas r ~ov ~nv =
+let docas r ~expect ~update =
   (* lock? *)
   match r.content with
-  | Normal x when x = ov -> ( r.content <- Normal nv ; true )
+  | Normal x when x = expect -> ( r.content <- Normal update ; true )
   | _                    -> false
   (* unlock? *)
 
 (* Isn't that heavy at runtime? OCaml should definetly have existentials. *)
-type 'a t = { ov : 'a ; nv : 'a ; r : 'a ref }
+type 'a t = { expect : 'a ; update : 'a ; r : 'a ref }
 module type abstract_t = sig type u val it : u t end
 type abstract_t = (module abstract_t)
 
-let build (type v) (r:v ref) ~(ov:v) ~(nv:v) =
+let build (type v) (r:v ref) ~(expect:v) ~(update:v) =
   let module M = struct
       type u = v
-      let it = { ov ; nv ; r }
+      let it = { expect ; update ; r }
     end in (module M : abstract_t)
 
 let commit cas =
   let module M = (val cas : abstract_t) in
-  let { r ; ov ; nv } = M.it in
-  docas r ~ov ~nv
+  let { r ; expect ; update } = M.it in
+  docas r ~expect ~update
 
 let semicas cas =
   let module M = (val cas : abstract_t) in
-  let { r ; ov ; _ } = M.it in
+  let { r ; expect ; _ } = M.it in
   (* lock? *)
   match r.content with
-  | Normal x when x = ov -> ( r.content <- OnGoingKCAS x ; true )
+  | Normal x when x = expect -> ( r.content <- OnGoingKCAS x ; true )
   | _                    -> false
   (* unlock? *)
 
@@ -58,11 +58,11 @@ let rollbwd cas =
 
 let rollfwd cas =
   let module M = (val cas : abstract_t) in
-  let { r ; nv ; ov } = M.it in
+  let { r ; update ; expect } = M.it in
   (* lock? *)
   match r.content with
   | Normal _ -> assert false
-  | OnGoingKCAS x -> ( assert (x = ov) ; r.content <- Normal nv )
+  | OnGoingKCAS x -> ( assert (x = expect) ; r.content <- Normal update )
   (* unlock? *)
 
 let kCAS l =
@@ -72,7 +72,8 @@ let kCAS l =
     ( List.iter rollbwd l ; false )
 
 module Sugar : sig
-  type 'a casref_update
+  type 'a casref_update = { expect : 'a ;
+                            update : 'a }
   type 'a casref = 'a ref
   val ref : 'a -> 'a casref
   val (!) : 'a casref -> 'a
@@ -80,14 +81,14 @@ module Sugar : sig
   val (<!=) : 'a casref -> 'a casref_update -> bool
   val (<:=) : 'a casref -> 'a casref_update -> abstract_t
 end = struct
-  type 'a casref_update = { ov : 'a ;
-                            nv : 'a }
+  type 'a casref_update = { expect : 'a ;
+                            update : 'a }
   type 'a casref = 'a ref
   let ref x = ref x
   let (!) r = get r
 
-  let (-->) ov nv = { ov ; nv }
+  let (-->) expect update = { expect ; update }
 
-  let (<!=) r { ov ; nv } = docas r ~ov ~nv
-  let (<:=) r { ov ; nv } = build r ~ov ~nv
+  let (<!=) r { expect ; update } = docas r ~expect ~update
+  let (<:=) r { expect ; update } = build r ~expect ~update
 end
