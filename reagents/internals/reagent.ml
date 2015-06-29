@@ -3,7 +3,7 @@ open CAS.Sugar
 open Reaction.Sugar
 
 (* TODO: optim block / non block                         *)
-(* TODO: optim when only onw cas ; but seems to need CPS *)
+(* TODO: optim when only one cas ; but seems to need CPS *)
 
 type ('a, 'b) t = {
     buildReact : 'a -> 'b Offer.t -> unit
@@ -58,7 +58,6 @@ let noop : ('a, 'a) t =
 (*  in { buildReact }                               *)
 (*                                                  *)
 
-(* TODO: optimise when only one CAS ? cf scala code *)
 let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
   let buildReact () k =
     let rx = Reaction.add_cas Reaction.inert r

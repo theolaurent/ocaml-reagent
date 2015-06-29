@@ -10,12 +10,16 @@ type 'a status =
 (* The thread is suposed to be resumed only once, and when   *)
 (* the offer has been completed.                             *)
 (* Also, all completed offers should be waken at some point. *)
-type 'a t = { state : 'a status casref ;
+type 'a t = { state  : 'a status casref ;
               thread : 'a reaction_build Sched.cont }
 
+let is_waiting o = match !(o.state) with
+  | Waiting -> true
+  | _       -> false
+
+
 (* completed does not mean waken up *)
-(* Hmmm... not in a reaction... Well this is offers, not channels !*)
-let try_complete o a = o.state <!= Waiting --> Completed a
+let complete_cas o a rx = o.state <:= Waiting --> Completed { rx ; result = a }
 
 let wake o () =
   let s = !(o.state) in
@@ -29,7 +33,5 @@ let suspend f =
                                        thread = k }))
 
 let try_resume o a =
-  if try_complete o a then ( wake o () ; true )
+  if o.state <!= Waiting --> Completed a then ( wake o () ; true )
   else false
-
-(* TODO: rx_with_resume *)
