@@ -45,32 +45,32 @@ let rx_answer m a =
                      (m.status <:= Waiting --> Answered a))
                   (wake m)
 
-(* TODO: lock free bags or at least concurrent queue instead of Queue.t *)
-type ('a, 'b) channel = { comming_from_a : ('a, 'b) message Queue.t ;
-                          comming_from_b : ('b, 'a) message Queue.t }
+(* TODO: lock free bags ; and bootstrap with reagents *)
+type ('a, 'b) channel = { comming_from_a : ('a, 'b) message BasicConcurrentQueue.t ;
+                          comming_from_b : ('b, 'a) message BasicConcurrentQueue.t }
 
 let flip_channel c = { comming_from_a = c.comming_from_b ;
                        comming_from_b = c.comming_from_a }
 
-let new_channel () = { comming_from_a = Queue.create () ;
-                       comming_from_b = Queue.create () }
+let new_channel () = { comming_from_a = BasicConcurrentQueue.create () ;
+                       comming_from_b = BasicConcurrentQueue.create () }
 
 
 let rec get_first_mesage q =
-  if Queue.is_empty q then None
-  else let m = Queue.pop q in
-       ( if is_waiting m then
-           Some m
-         else get_first_mesage q )
+  match BasicConcurrentQueue.try_pop q with
+  | None -> None (* TODO: use an option monad lib *)
+  | Some m -> ( if is_waiting m then
+                  Some m
+                else get_first_mesage q )
 
 
 let post_a c =
   let buildReact arg k =
     match get_first_mesage c.comming_from_b with
-    | None -> Queue.push { playload = arg ; status = ref Waiting ; offer = k }
+    | None -> BasicConcurrentQueue.push { playload = arg ; status = ref Waiting ; offer = k }
                          c.comming_from_a
                 (* TODO: Concurrent data structure (with cas?) *)
-    | Some m -> ( assert (Queue.is_empty c.comming_from_a) ;
+    | Some m -> ( assert (BasicConcurrentQueue.is_empty c.comming_from_a) ;
                 (* TODO: what behaviour do I want regarding order?           *)
                 (* TODO: what about this reaction merge in the scala verion? *)
                   ignore (Offer.try_resume k { rx = rx_answer m arg ; result = m.playload }) )
