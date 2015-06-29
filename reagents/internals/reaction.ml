@@ -14,7 +14,7 @@ let add_pc rx f = { rx with pc_list = f :: rx.pc_list }
 
 let combine r1 r2 = { cas_list = r1.cas_list @ r2.cas_list ;
                       pc_list  = r1.pc_list  @ r2.pc_list  }
-                 (* TODO: Hmm not efficient... LazyLists ? *)
+                 (* TODO: Hmm not efficient... Sets ? Check this order thing ...  *)
 
 let try_commit r =
   let success = match r.cas_list with
