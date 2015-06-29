@@ -27,6 +27,7 @@ let pipe (r1:('a, 'b) t) (r2:('b, 'c) t) : ('a, 'c) t =
 
 let (>>) = pipe
 
+(* TODO: I think the build should be concurrent. Also cf pair.              *)
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
   let buildReact arg k =
     r1.buildReact arg k ; r2.buildReact arg k
@@ -89,6 +90,7 @@ let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
 
 (* TODO: I am not fully satistied with the pair, I think the built up of *)
 (* the reaction should be concurrent... (not as in the scala version!)   *)
+(* Also cf choose.                                                       *)
 let first (r:('a, 'b) t) : ('a * 'c, 'b * 'c) t =
   let buildReact (a, b) k =
     let (rx, res) = Conthread.suspend (r.buildReact a) in
