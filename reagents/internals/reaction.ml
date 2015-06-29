@@ -25,3 +25,13 @@ let try_commit r =
   let () = if success then
              List.iter (fun f -> f ()) r.pc_list
   in success
+
+module Sugar = struct
+  type 'a reaction_build = { rx : t ; result : 'a }
+  (* TODO : monadic action (>>=, etc...) *)
+  let return x = { rx = inert ; result = x }
+  (* is that really resonnable? *)
+
+  let ( ++ ) = combine
+  let ( !! ) = try_commit
+end

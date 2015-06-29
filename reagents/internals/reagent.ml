@@ -1,17 +1,18 @@
 
 open CAS.Sugar
+open Reaction.Sugar
 
 (* TODO: optim block / non block                         *)
 (* TODO: optim when only onw cas ; but seems to need CPS *)
 
 type ('a, 'b) t = {
-    buildReact : 'a -> (Reaction.t * 'b) Conthread.t -> unit
+    buildReact : 'a -> 'b Offer.t -> unit
   }
 
 
 let run r arg =
-  let (rx, res) = Conthread.suspend (r.buildReact arg) in
-  if Reaction.try_commit rx then res
+  let { rx ; result } = Offer.suspend (r.buildReact arg) in
+  if Reaction.try_commit rx then result
   else failwith "Reagent.run: No transient failure for now"
 
 
@@ -20,12 +21,10 @@ let run r arg =
 (* what does the scalal version?                                            *)
 let pipe (r1:('a, 'b) t) (r2:('b, 'c) t) : ('a, 'c) t =
   let buildReact arg k =
-    let (rx1, res1) = Conthread.suspend (r1.buildReact arg) in
-    let (rx2, res2) = Conthread.suspend (r2.buildReact res1) in
-    Conthread.resume k (Reaction.combine rx1 rx2, res2)
+    let { rx = rx1 ; result = res1 } = Offer.suspend (r1.buildReact arg) in
+    let { rx = rx2 ; result = res2 } = Offer.suspend (r2.buildReact res1) in
+    ignore (Offer.try_resume k { rx = Reaction.combine rx1 rx2 ; result = res2})
   in { buildReact }
-
-let (>>) = pipe
 
 (* TODO: I think the build should be concurrent. Also cf pair.              *)
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
@@ -33,11 +32,9 @@ let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
     r1.buildReact arg k ; r2.buildReact arg k
   in { buildReact }
 
-let (+) = choose
-
 let constant (x:'a) : ('b, 'a) t =
   let buildReact _ k =
-    Conthread.resume k (Reaction.inert, x)
+    ignore (Offer.try_resume k (return x))
   in { buildReact }
 
 let never : ('a, 'b) t =
@@ -47,7 +44,7 @@ let never : ('a, 'b) t =
 
 let noop : ('a, 'a) t =
   let buildReact a k =
-    Conthread.resume k (Reaction.inert, a)
+    ignore (Offer.try_resume k (return a))
   in { buildReact }
 
 
@@ -57,7 +54,7 @@ let noop : ('a, 'a) t =
 (*                                                  *)
 (* let read (r:'a casref) : (unit, 'a) t =          *)
 (*  let buildReact () k =                           *)
-(*    Conthread.resume k (Reaction.inert, !r)       *)
+(*    Offer.resume k (return !r)       *)
 (*  in { buildReact }                               *)
 (*                                                  *)
 
@@ -66,7 +63,7 @@ let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
   let buildReact () k =
     let rx = Reaction.add_cas Reaction.inert r
                               ~expect ~update
-    in Conthread.resume k (rx, ())
+    in ignore (Offer.try_resume k { rx ; result = () })
   in { buildReact }
 (* TODO: Hmm but the actual cas will not be performed until the commit phase ..   *)
 (* Thus, to cas piped are bound to fail? (the problem being cas >> read is false! *)
@@ -79,7 +76,7 @@ let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
 (* intuistic when sequenced. Remember that a reaction is two-phased. *)
 let lift (f:'a -> 'b) : ('a, 'b) t =
   let buildReact a k =
-    Conthread.resume k (Reaction.inert, f a)
+    ignore (Offer.try_resume k (return (f a)))
   in { buildReact }
 
 let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
@@ -93,16 +90,21 @@ let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
 (* Also cf choose.                                                       *)
 let first (r:('a, 'b) t) : ('a * 'c, 'b * 'c) t =
   let buildReact (a, b) k =
-    let (rx, res) = Conthread.suspend (r.buildReact a) in
-    Conthread.resume k (rx, (res, b))
+    let { rx ; result } = Offer.suspend (r.buildReact a) in
+    ignore (Offer.try_resume k { rx ; result = (result, b) })
   in { buildReact }
 let second (r:('a, 'b) t) : ('c * 'a, 'c * 'b) t =
   let buildReact (a, b) k =
-    let (rx, res) = Conthread.suspend (r.buildReact b) in
-    Conthread.resume k (rx, (b, res))
+    let { rx ; result } = Offer.suspend (r.buildReact b) in
+    ignore (Offer.try_resume k { rx ; result = (a, result) })
   in { buildReact }
 
 let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
-  (lift (fun a -> (a, a))) >> first r1 >> second r2
+  pipe (lift (fun a -> (a, a)))
+       (pipe (first r1) (second r2))
 
-let ( * ) = pair
+module Sugar = struct
+  let ( * ) = pair
+  let ( + ) = choose
+  let ( >> ) = pipe
+end
