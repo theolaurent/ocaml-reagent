@@ -1,4 +1,6 @@
 
+open CAS.Sugar
+
 (* TODO: optim block / non block                         *)
 (* TODO: optim when only onw cas ; but seems to need CPS *)
 
@@ -47,7 +49,33 @@ let noop : ('a, 'a) t =
     Conthread.resume k (Reaction.inert, a)
   in { buildReact }
 
+
+(* read ref should not be a reagent. Indeend it can *)
+(* be confusing when piping as read ref is truly    *)
+(* equivalent to const (!r)                         *)
+(*                                                  *)
+(* let read (r:'a casref) : (unit, 'a) t =          *)
+(*  let buildReact () k =                           *)
+(*    Conthread.resume k (Reaction.inert, !r)       *)
+(*  in { buildReact }                               *)
+(*                                                  *)
+
+(* TODO: optimise when only one CAS ? cf scala code *)
+let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
+  let buildReact () k =
+    let rx = Reaction.add_cas Reaction.inert r
+                              ~expect ~update
+    in Conthread.resume k (rx, ())
+  in { buildReact }
+(* TODO: Hmm but the actual cas will not be performed until the commit phase ..   *)
+(* Thus, to cas piped are bound to fail? (the problem being cas >> read is false! *)
+(* I think this version behave as the scala code thought  ..                      *)
+
+
 (* f is total for the moment (contrary to the scala version of lift) *)
+(*                                                                   *)
+(* Be careful with lift and computed, their behaviour can be non-    *)
+(* intuistic when sequenced. Remember that a reaction is two-phased. *)
 let lift (f:'a -> 'b) : ('a, 'b) t =
   let buildReact a k =
     Conthread.resume k (Reaction.inert, f a)
