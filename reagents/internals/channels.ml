@@ -1,32 +1,34 @@
 
+
 open CAS.Sugar
-open Reagent
 
+type ('a, 'b) status =
+  | Waiting of 'a
+  | Answered of 'b
+  | WakedUp
 
-(* TODO: I don't think this reaction exchange ... ; cf scala code *)
+(* The thread is suposed to be resumed only once, and when   *)
+(* the offer has been completed.                             *)
+(* Also, all completed offers should be waken at some point. *)
+type ('a, 'b) t = { state : ('a, 'b) status casref ;
+                    thread : 'b Sched.cont }
 
-(* TODO: "non blocking bags" instead of queues ; cf scala code *)
-type ('a, 'b) channel_status =
-  | Incoming of ('b, 'a) Offer.t Queue.t
-  | Outgoing of ('a, 'b) Offer.t Queue.t
+let block_and_send (a:'a) (f:('a, 'b) t -> unit) : 'b =
+  perform (Sched.Suspend (fun k -> f { state  = ref (Waiting a) ;
+                                       thread = k }))
 
-type ('a, 'b) channel = ('a, 'b) channel_status casref
+(* answering does not mean waken up *)
+(* Hmmm... not in a reaction... Well this is offers, not channels !*)
+let try_answer m b =
+  let s = !(m.state) in
+  match s with
+  | Waiting a when m.state <!= s --> Answered b
+      -> Some a
+  | _ -> None
 
-(* let rec first_offer q = *)
-(*   if Queue.empty q then None *)
-(*   else let o = Queue.pop q in *)
-(*        match !(o.state) with *)
-(*        | Waiting a when  *)
-(*  *)
-(*  *)
-(* (\* TODO: is it possible to write swap as a composition of read/cas ? *\) *)
-(* let swap (c:('a, 'b) channel) : ('a, 'b) t = *)
-(*   let buildReact () k = *)
-(*     let state = !c in *)
-(*     match state with *)
-(*     | Incoming q -> *)
-(*  *)
-(*     let rx = Reaction.add_cas Reaction.inert r *)
-(*                               ~expect ~update *)
-(*     in return_react k rx () *)
-(*   in { buildReact } *)
+let wake k () =
+  let s = !(k.state) in
+  match s with
+  | Answered v when k.state <!= s --> WakedUp
+      -> perform (Sched.Resume (k.thread, v))
+  | _ -> failwith "Offer.wake: trying to wake a non-answered offer"
