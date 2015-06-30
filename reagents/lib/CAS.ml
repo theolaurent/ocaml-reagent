@@ -15,8 +15,12 @@ let get r = match r.content with
   | Normal x -> x
   | OnGoingKCAS x -> x
 
+
+type t =
+  | CAS : 'a ref * 'a updt -> t
+
 (* waiting for the hardware version *)
-let docas r { expect ; update } =
+let commit (CAS (r, { expect ; update })) =
   (* lock? *)
   match r.content with
   (* | Normal x when x = expect -> ( r.content <- Normal update ; true ) *)
@@ -27,47 +31,29 @@ let docas r { expect ; update } =
   | _                         -> false
   (* unlock? *)
 
-(* Isn't that heavy at runtime? OCaml should definetly have existentials. *)
-module type t = sig type u val updt : u updt val r : u ref end
-type t = (module t)
-
-let build (type v) (r:v ref) (updt:v updt) =
-  let module M = struct
-      type u = v
-      let updt = updt
-      let r = r
-    end in (module M : t)
-
-let commit cas =
-  let module M = (val cas : t) in
-  docas M.r M.updt
-
-let semicas cas =
-  let module M = (val cas : t) in
+let semicas (CAS (r, updt)) =
   (* lock? *)
-  match M.r.content with
+  match r.content with
   (* again, physical equality *)
-  | Normal x when x == M.updt.expect -> ( M.r.content <- OnGoingKCAS x ; true )
+  | Normal x when x == updt.expect -> ( r.content <- OnGoingKCAS x ; true )
   | _                                -> false
   (* unlock? *)
 
 (* only the tread that perform the semicas should be able to rollbwd/fwd *)
-let rollbwd cas =
-  let module M = (val cas : t) in
+let rollbwd (CAS (r, updt)) =
   (* lock? *)
-  match M.r.content with
+  match r.content with
   | Normal _      -> assert false
-  | OnGoingKCAS x -> M.r.content <- Normal x
+  | OnGoingKCAS x -> r.content <- Normal x
   (* unlock? *)
 
-let rollfwd cas =
-  let module M = (val cas : t) in
+let rollfwd (CAS (r, updt)) =
   (* lock? *)
-  match M.r.content with
+  match r.content with
   | Normal _ -> assert false
                      (* still physical eq *)
-  | OnGoingKCAS x -> ( assert (x == M.updt.expect) ;
-                       M.r.content <- Normal M.updt.update )
+  | OnGoingKCAS x -> ( assert (x == updt.expect) ;
+                       r.content <- Normal updt.update )
   (* unlock? *)
 
 let kCAS l =
@@ -92,6 +78,6 @@ end = struct
 
   let (-->) expect update = { expect ; update }
 
-  let (<!=) = docas
-  let (<:=) = build
+  let (<!=) r u = commit (CAS (r, u))
+  let (<:=) r u = CAS (r, u)
 end

@@ -3,15 +3,12 @@ type 'a ref
 
 type 'a updt = { expect : 'a ; update : 'a }
 
-type t
-
 val ref : 'a -> 'a ref
 
 val get : 'a ref -> 'a
 
-val docas : 'a ref -> 'a updt -> bool
-
-val build : 'a ref -> 'a updt -> t
+type t =
+  | CAS : 'a ref * 'a updt -> t
 
 val commit : t -> bool
 
