@@ -11,7 +11,9 @@
  * TODO: I think there might be a problem with multiple threads on user-side.
  *       If a user use this library and multiple threads,
  *       I think the sharing of the stack might be a problem.
- *
+ * TODO: Use my own custom data structure rather than this MVar lib.
+ *       For an example of use of Condition module, see the source of
+ *       the Event module of the ocaml std lib.
  *)
 
 
