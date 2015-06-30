@@ -45,7 +45,7 @@ let rec try_pop q =
                                   then Some v else try_pop q
 
 let pop q =
-  match try_pop with
+  match try_pop q with
   | None -> raise Empty
   | Some x -> x
 
