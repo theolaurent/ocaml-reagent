@@ -43,8 +43,11 @@ let run main =
             enqueue k () !cur_tid;
             spawn f ()
         | Suspend f ->
-            f (Cont (k,!cur_tid));
-            dequeue ()
+            (* f (Cont (k,!cur_tid)); *)
+            (* dequeue () *)
+            (* hack to get effects handled *)
+            let tid = !cur_tid in
+            spawn (fun () -> f (Cont (k,tid))) ()
         | Resume(Cont (k',tid), v) ->
             enqueue k' v tid;
             continue k ()
