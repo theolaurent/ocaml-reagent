@@ -17,7 +17,11 @@ let get r = match r.content with
 let docas r ~expect ~update =
   (* lock? *)
   match r.content with
-  | Normal x when x = expect -> ( r.content <- Normal update ; true )
+  (* | Normal x when x = expect -> ( r.content <- Normal update ; true ) *)
+  (* structural equality cause segfault (with continuations?)            *)
+  (* Anyway physiqual equality is not absurd for CAS, I guess that what  *)
+  (* hardware does.                                                      *)
+  | Normal x when x == expect -> ( r.content <- Normal update ; true )
   | _                    -> false
   (* unlock? *)
 
