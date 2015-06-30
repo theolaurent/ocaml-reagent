@@ -1,2 +1,2 @@
-# ocaml-effects
-Random pieces of code produced in internship at OCamlLabs
+# ocaml-reagent
+An implementation of reagents for multicore OCaml
