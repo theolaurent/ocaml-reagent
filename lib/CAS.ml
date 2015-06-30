@@ -3,58 +3,48 @@
 
 type 'a updt = { expect : 'a ; update : 'a }
 
-type 'a refstate =
+type 'a state =
   | Normal of 'a
-  | OnGoingKCAS of 'a (* store the old value *)
+  | OnGoingKCAS of 'a
 
-type 'a ref = { mutable content : 'a refstate }
+type 'a ref = { mutable content : 'a state }
+
+let compare_and_swap r x y =
+  Obj.compare_and_swap_field (Obj.repr r) 0 (Obj.repr x) (Obj.repr y)
 
 let ref x = { content = Normal x }
 
 let get r = match r.content with
-  | Normal x -> x
-  | OnGoingKCAS x -> x
-
+  | Normal a -> a
+  | OnGoingKCAS a -> a
 
 type t =
   | CAS : 'a ref * 'a updt -> t
 
-(* waiting for the hardware version *)
 let commit (CAS (r, { expect ; update })) =
-  (* lock? *)
-  match r.content with
-  (* | Normal x when x = expect -> ( r.content <- Normal update ; true ) *)
-  (* structural equality cause segfault (with continuations?)            *)
-  (* Anyway physical equality is not absurd for CAS, I guess that what   *)
-  (* hardware does.                                                      *)
-  | Normal x when x == expect -> ( r.content <- Normal update ; true )
+  let s = r.content in
+  match s with
+  | Normal a when a == expect -> compare_and_swap r s (Normal update)
   | _                         -> false
-  (* unlock? *)
 
-let semicas (CAS (r, updt)) =
-  (* lock? *)
-  match r.content with
-  (* again, physical equality *)
-  | Normal x when x == updt.expect -> ( r.content <- OnGoingKCAS x ; true )
-  | _                                -> false
-  (* unlock? *)
+let semicas (CAS (r, { expect ; _ })) =
+  let s = r.content in
+  match s with
+  | Normal a when a == expect -> compare_and_swap r s (OnGoingKCAS a)
+  | _                         -> false
 
 (* only the tread that perform the semicas should be able to rollbwd/fwd *)
-let rollbwd (CAS (r, updt)) =
-  (* lock? *)
+(* so we don't need to cas, just set the field to the new value          *)
+let rollbwd (CAS (r, _)) =
   match r.content with
   | Normal _      -> assert false
   | OnGoingKCAS x -> r.content <- Normal x
-  (* unlock? *)
 
-let rollfwd (CAS (r, updt)) =
-  (* lock? *)
+let rollfwd (CAS (r, { update ; _ })) =
   match r.content with
   | Normal _ -> assert false
-                     (* still physical eq *)
-  | OnGoingKCAS x -> ( assert (x == updt.expect) ;
-                       r.content <- Normal updt.update )
-  (* unlock? *)
+  | OnGoingKCAS x ->  r.content <- Normal update
+                    (* we know we have x == expect *)
 
 let kCAS l =
   if List.for_all (fun cas -> semicas cas) l then
