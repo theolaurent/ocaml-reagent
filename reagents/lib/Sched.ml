@@ -46,8 +46,8 @@ let run main =
             (* f (Cont (k,!cur_tid)); *)
             (* dequeue () *)
             (* hack to get effects handled *)
-            let tid = !cur_tid in
-            spawn (fun () -> f (Cont (k,tid))) ()
+            Effects.handle scheduler f (Cont (k,!cur_tid));
+            dequeue ()
         | Resume(Cont (k',tid), v) ->
             enqueue k' v tid;
             continue k ()
