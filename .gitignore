@@ -4,3 +4,6 @@
 _build
 # merlin
 .merlin
+# a lib of which i don't know the licence
+effects-threads/lib/Mvar.ml
+effects-threads/lib/Mvar.mli
