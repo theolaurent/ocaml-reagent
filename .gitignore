@@ -1,0 +1,6 @@
+# ocamlbuild
+*.byte
+*.native
+_build
+# merlin
+.merlin
