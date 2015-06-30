@@ -58,10 +58,9 @@ let noop : ('a, 'a) t =
 (*  in { buildReact }                               *)
 (*                                                  *)
 
-let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
+let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
   let buildReact () k =
-    let rx = Reaction.add_cas Reaction.inert r
-                              ~expect ~update
+    let rx = Reaction.cas r updt
     in ignore (Offer.try_resume k { rx ; result = () })
   in { buildReact }
 (* TODO: Hmm but the actual cas will not be performed until the commit phase ..   *)
@@ -70,6 +69,7 @@ let cas (r:'a casref) ~(expect:'a) ~(update:'a) : (unit, unit) t =
 
 
 (* f is total for the moment (contrary to the scala version of lift) *)
+(* TODO: when trasient failure, partial, with option and / or exn    *)
 (*                                                                   *)
 (* Be careful with lift and computed, their behaviour can be non-    *)
 (* intuistic when sequenced. Remember that a reaction is two-phased. *)

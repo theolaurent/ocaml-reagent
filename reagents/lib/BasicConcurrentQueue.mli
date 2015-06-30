@@ -1,6 +1,8 @@
 
 type 'a t
 
+exception Empty
+
 val create : unit -> 'a t
 
 val push : 'a -> 'a t -> unit

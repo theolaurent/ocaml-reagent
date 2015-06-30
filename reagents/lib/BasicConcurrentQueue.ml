@@ -1,12 +1,13 @@
 
 open CAS.Sugar
 
-(* TODO: this could be rewritten with reagents for boostrap! *)
 type 'a node = N of ('a * 'a node) option casref
 
 type 'a t = { head : 'a node ; tail : 'a node }
 (* invariant : head = None <=> tail = None          *)
 (* invariant : tail = Some (x, node) => node = None *)
+
+exception Empty
 
 let create () = { head = N (ref None) ; tail = N (ref None) }
 
@@ -29,7 +30,6 @@ let push v q =
        then () else loop ()
   in loop ()
 
-
 let rec try_pop q =
   let N head = q.head in
   let N tail = q.tail in
@@ -43,6 +43,11 @@ let rec try_pop q =
                                   then Some v else try_pop q
                       | Some _ -> if (head <!= s --> s')
                                   then Some v else try_pop q
+
+let pop q =
+  match try_pop with
+  | None -> raise Empty
+  | Some x -> x
 
 let is_empty q =
   let N head = q.head in

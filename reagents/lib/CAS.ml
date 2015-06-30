@@ -1,6 +1,8 @@
 
 (* TODO: afterCAS actions!! *)
 
+type 'a updt = { expect : 'a ; update : 'a }
+
 type 'a refstate =
   | Normal of 'a
   | OnGoingKCAS of 'a (* store the old value *)
@@ -14,59 +16,58 @@ let get r = match r.content with
   | OnGoingKCAS x -> x
 
 (* waiting for the hardware version *)
-let docas r ~expect ~update =
+let docas r { expect ; update } =
   (* lock? *)
   match r.content with
   (* | Normal x when x = expect -> ( r.content <- Normal update ; true ) *)
   (* structural equality cause segfault (with continuations?)            *)
-  (* Anyway physiqual equality is not absurd for CAS, I guess that what  *)
+  (* Anyway physical equality is not absurd for CAS, I guess that what   *)
   (* hardware does.                                                      *)
   | Normal x when x == expect -> ( r.content <- Normal update ; true )
-  | _                    -> false
+  | _                         -> false
   (* unlock? *)
 
 (* Isn't that heavy at runtime? OCaml should definetly have existentials. *)
-type 'a t = { expect : 'a ; update : 'a ; r : 'a ref }
-module type abstract_t = sig type u val it : u t end
-type abstract_t = (module abstract_t)
+module type t = sig type u val updt : u updt val r : u ref end
+type t = (module t)
 
-let build (type v) (r:v ref) ~(expect:v) ~(update:v) =
+let build (type v) (r:v ref) (updt:v updt) =
   let module M = struct
       type u = v
-      let it = { expect ; update ; r }
-    end in (module M : abstract_t)
+      let updt = updt
+      let r = r
+    end in (module M : t)
 
 let commit cas =
-  let module M = (val cas : abstract_t) in
-  let { r ; expect ; update } = M.it in
-  docas r ~expect ~update
+  let module M = (val cas : t) in
+  docas M.r M.updt
 
 let semicas cas =
-  let module M = (val cas : abstract_t) in
-  let { r ; expect ; _ } = M.it in
+  let module M = (val cas : t) in
   (* lock? *)
-  match r.content with
-  | Normal x when x = expect -> ( r.content <- OnGoingKCAS x ; true )
-  | _                    -> false
+  match M.r.content with
+  (* again, physical equality *)
+  | Normal x when x == M.updt.expect -> ( M.r.content <- OnGoingKCAS x ; true )
+  | _                                -> false
   (* unlock? *)
 
 (* only the tread that perform the semicas should be able to rollbwd/fwd *)
 let rollbwd cas =
-  let module M = (val cas : abstract_t) in
-  let { r ; _ } = M.it in
+  let module M = (val cas : t) in
   (* lock? *)
-  match r.content with
-  | Normal _ -> assert false
-  | OnGoingKCAS x -> r.content <- Normal x
+  match M.r.content with
+  | Normal _      -> assert false
+  | OnGoingKCAS x -> M.r.content <- Normal x
   (* unlock? *)
 
 let rollfwd cas =
-  let module M = (val cas : abstract_t) in
-  let { r ; update ; expect } = M.it in
+  let module M = (val cas : t) in
   (* lock? *)
-  match r.content with
+  match M.r.content with
   | Normal _ -> assert false
-  | OnGoingKCAS x -> ( assert (x = expect) ; r.content <- Normal update )
+                     (* still physical eq *)
+  | OnGoingKCAS x -> ( assert (x == M.updt.expect) ;
+                       M.r.content <- Normal M.updt.update )
   (* unlock? *)
 
 let kCAS l =
@@ -76,23 +77,21 @@ let kCAS l =
     ( List.iter rollbwd l ; false )
 
 module Sugar : sig
-  type 'a casref_update = { expect : 'a ;
-                            update : 'a }
+  type 'a casupdt = 'a updt
   type 'a casref = 'a ref
   val ref : 'a -> 'a casref
   val (!) : 'a casref -> 'a
-  val (-->) : 'a -> 'a -> 'a casref_update
-  val (<!=) : 'a casref -> 'a casref_update -> bool
-  val (<:=) : 'a casref -> 'a casref_update -> abstract_t
+  val (-->) : 'a -> 'a -> 'a casupdt
+  val (<!=) : 'a casref -> 'a casupdt -> bool
+  val (<:=) : 'a casref -> 'a casupdt -> t
 end = struct
-  type 'a casref_update = { expect : 'a ;
-                            update : 'a }
+  type 'a casupdt = 'a updt
   type 'a casref = 'a ref
   let ref x = ref x
   let (!) r = get r
 
   let (-->) expect update = { expect ; update }
 
-  let (<!=) r { expect ; update } = docas r ~expect ~update
-  let (<:=) r { expect ; update } = build r ~expect ~update
+  let (<!=) = docas
+  let (<:=) = build
 end

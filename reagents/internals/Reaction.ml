@@ -2,16 +2,15 @@
 open CAS.Sugar
 
 type t = {
-    cas_list : CAS.abstract_t list ;
+    cas_list : CAS.t list ;
     pc_list  : (unit -> unit) list ;
   }
 
 let inert = { cas_list = [] ;
               pc_list  = [] }
 
-let add_cas rx r ~expect ~update = { rx with cas_list = (r <:= expect --> update) :: rx.cas_list }
-let add_abstract_cas rx cas = { rx with cas_list = cas :: rx.cas_list }
-let add_pc rx f = { rx with pc_list = f :: rx.pc_list }
+let cas r updt = { cas_list = [ r <:= updt ] ; pc_list  = [] }
+let pc  f      = { pc_list  = [ f ]          ; cas_list = [] }
 
 let combine r1 r2 = { cas_list = r1.cas_list @ r2.cas_list ;
                       pc_list  = r1.pc_list  @ r2.pc_list  }
