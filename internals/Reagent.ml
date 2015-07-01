@@ -66,7 +66,7 @@ let noop : ('a, 'a) t =
 
 let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
   let tryReact () rx next offer =
-    next.tryReact () (rx ++ Reaction.cas r updt) commit offer
+    next.tryReact () (rx ++ Reaction.cas (r <:= updt)) commit offer
   in { tryReact ; isCommit = false }
 (* TODO: Hmm but the actual cas will not be performed until the commit phase ..    *)
 (* Thus, two cas piped are bound to fail? (the problem being cas >> read is false! *)
