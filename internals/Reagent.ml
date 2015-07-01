@@ -20,7 +20,8 @@ let rec commit : 'a . ('a, 'a) t =
         then ignore (Offer.try_resume offer (Obj.magic arg))
         else failwith "Reagent.commit: No transient failure for now" )
     else
-      next.tryReact arg rx commit offer
+      (* next.tryReact arg rx commit offer *)
+      assert false
   in { tryReact ; isCommit = true }
 
 let run : ('a, 'b) t -> 'a -> 'b =
