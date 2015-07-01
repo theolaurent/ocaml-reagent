@@ -2,7 +2,7 @@
 open CAS.Sugar
 open Reaction.Sugar
 
-type 'a t = 'a reaction_build Sched.cont option casref
+type 'a t = 'a Sched.cont option casref
 
 let suspend f =
   perform (Sched.Suspend (fun k -> f (ref (Some k))))
