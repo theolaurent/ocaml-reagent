@@ -1,11 +1,11 @@
 
-TEST=test_composition.ml test_queue.ml
+TEST=$(wildcard test/*.ml)
 
 BYTES=$(TEST:.ml=.byte)
 DEBUG=$(TEST:.ml=.d.byte)
 
 
-FLAGS=-Is lib,internals
+FLAGS=-Is lib,internals -lib unix
 
 .PHONY:byte debug clean
 
