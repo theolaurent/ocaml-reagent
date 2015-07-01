@@ -5,14 +5,16 @@
 (* TODO: lock free bags ; what about bootstrap with reagents? *)
 (* TODO: and then multiple message answer via choose          *)
 (*       also posting an offer on the channel ??              *)
-type ('a, 'b) t = { a : ('a, 'b) Message.t BasicConcurrentQueue.t ;
-                    b : ('b, 'a) Message.t BasicConcurrentQueue.t }
+type ('a, 'b) endpoint = { outgoing : ('a, 'b) Message.t BasicConcurrentQueue.t ;
+                           incoming : ('b, 'a) Message.t BasicConcurrentQueue.t }
 
-let flip_channel c = { a = c.b ;
-                       b = c.a }
+let flip_endpoint e = { outgoing = e.incoming ;
+                        incoming = e.outgoing }
 
-let new_channel () = { a = BasicConcurrentQueue.create () ;
-                       b = BasicConcurrentQueue.create () }
+let create () =
+  let e1 = { outgoing = BasicConcurrentQueue.create () ;
+             incoming = BasicConcurrentQueue.create () } in
+  (e1, flip_endpoint e1)
 
 
 let rec get_first_mesage q =
@@ -23,11 +25,8 @@ let rec get_first_mesage q =
                 else get_first_mesage q )
 
 
-let post_a c = match get_first_mesage c.b with
-  | None -> Message.send ( fun m -> BasicConcurrentQueue.push m c.a )
-  | Some m -> ( assert (BasicConcurrentQueue.is_empty c.a) ;
-                Message.receive m )
-                (* TODO: what behaviour do I want regarding order?           *)
-
-let channel_post (c:('a, 'b) t) : (('a, 'b) Reagent.t * ('b, 'a) Reagent.t) =
-  (post_a c, post_a (flip_channel c))
+let swap e = match get_first_mesage e.incoming with
+  | None -> Message.send ( fun m -> BasicConcurrentQueue.push m e.outgoing )
+  | Some m -> (* assert ( BasicConcurrentQueue.is_empty e.outgoing ) *)
+              (* TODO: what behaviour do I want regarding order?     *)
+              Message.receive m
