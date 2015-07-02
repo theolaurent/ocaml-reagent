@@ -18,14 +18,14 @@ let is_available (M m) =
 let send f =
   let withReact arg rx next offer =
     f (M { playload = arg ; senderRx = rx ; senderK = next ; offer = offer })
-  in Some { withReact }
+  in Reagent { withReact }
 
 let receive (M m) =
   let merge =
     let withReact arg rx next offer =
       (commit next).withReact m.playload
                               (m.senderRx ++ rx ++ Reaction.c_offer m.offer arg)
-                              None
+                              Nope
                               offer
-    in Some { withReact }
+    in Reagent { withReact }
   in m.senderK >> merge
