@@ -26,7 +26,7 @@ let push v q =
     | Some (_, N node) ->
        assert (!node = None) ;
        if CAS.kCAS [ (tail <:= s    --> newnode) ;
-                     (node   <:= None --> newnode) ]
+                     (node <:= None --> newnode) ]
        then () else loop ()
   in loop ()
 

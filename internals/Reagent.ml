@@ -6,8 +6,8 @@ open Reaction.Sugar
 (* TODO: optim when only one cas                         *)
 
 type ('a, 'b) t_struct = { withReact : 'r . 'a -> Reaction.t
-                                              -> ('b, 'r) t
-                                              -> 'r Offer.t -> unit ;
+                                               -> ('b, 'r) t
+                                               -> 'r Offer.t -> unit ;
                          }
 and ('a, 'b) t = ('a, 'b) t_struct option
 

@@ -21,7 +21,7 @@ let rec get_first_mesage q =
   match BasicConcurrentQueue.try_pop q with
   | None -> None (* TODO: use an option monad library *)
   | Some m -> ( if Message.is_available m then
-                  Some m
+                  Some m (* TODO: this is not correct ; should put the offer back *)
                 else get_first_mesage q )
 
 

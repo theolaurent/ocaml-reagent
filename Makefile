@@ -5,7 +5,7 @@ BYTES=$(TEST:.ml=.byte)
 DEBUG=$(TEST:.ml=.d.byte)
 
 
-FLAGS=-Is lib,internals -lib unix
+FLAGS=-Is lib,internals,core -lib unix
 
 .PHONY:byte debug clean
 
