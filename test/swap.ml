@@ -35,7 +35,10 @@ let main () =
   printf "will fail! Reagents are not as powerful as communicating transactions!\n";
   printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2 >> Channel.swap ep2) 1;
   printf "should not see this!\n";
-
   ()
+
+(* remark: Reagent's blocking threads are completetly ignored by the   *)
+(* scheduler until they are waken, so if they aren't, the program just *)
+(* terminate anywya...                                                 *)
 
 let () = Sched.run main

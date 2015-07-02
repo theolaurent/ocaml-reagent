@@ -15,13 +15,13 @@ type ('a, 'b) t = { tryReact : 'r . 'a -> Reaction.t
 (*       get rid of Obj.magic                                         *)
 let rec commit : 'a . ('a, 'a) t =
   let tryReact arg rx next offer =
-    if next == Obj.magic commit then
+    if next.isCommit then
       ( if !! rx
         then ignore (Offer.try_resume offer (Obj.magic arg))
         else failwith "Reagent.commit: No transient failure for now" )
     else
-      (* next.tryReact arg rx commit offer *)
-      assert false
+      (* assert false *)
+      next.tryReact arg rx commit offer
   in { tryReact ; isCommit = true }
 
 let run : ('a, 'b) t -> 'a -> 'b =
