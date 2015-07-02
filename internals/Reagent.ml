@@ -29,7 +29,7 @@ let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
 let run (r:('a, 'b) t) (arg:'a) : 'b =
   let rx = Offer.suspend ((commit r).withReact (return arg) Nope)
   in if !! rx then Reaction.get_value rx
-     else failwith "Reagent.run: No transient failure for now"
+     else failwith "Reagent.run: No transient failure for now."
 
 
 (* TODO: think about what happen with (swap enpoint a) >> (swap enpoint b)  *)
@@ -66,23 +66,6 @@ let noop : ('a, 'a) t =
   in Reagent { withReact }
 
 
-(* read ref should not be a reagent. Indeend it can *)
-(* be confusing when piping as read ref is truly    *)
-(* equivalent to const (!r)                         *)
-
-let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
-  let withReact rx next offer =
-    (commit next).withReact (rx >> Reaction.cas (r <:= updt)) Nope offer
-  in Reagent { withReact }
-(* Hmm but the actual cas will not be performed until the commit phase..    *)
-(* Yep! But this is not what reagents are for: composing actions atomically *)
-
-let post_commit (f:'a -> unit) : ('a, 'a) t =
-  let withReact rx next offer =
-    let pc = (fun () -> f (Reaction.get_value rx)) in
-    (commit next).withReact (Reaction.pc pc >> rx) Nope offer
-  in Reagent { withReact }
-
 (* f is total for the moment (contrary to the scala version of lift) *)
 (* TODO: when trasient failure, partial, with option and / or exn    *)
 (*                                                                   *)
@@ -96,6 +79,27 @@ let lift (f:'a -> 'b) : ('a, 'b) t =
 let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
   let withReact rx next offer =
     (commit (f (Reaction.get_value rx))).withReact (rx >> return ()) next offer
+  in Reagent { withReact }
+
+
+(* I don't know if read should be a reagent. It is       *)
+(* trivialy written, and anyway rarelly used on its own. *)
+(* let read (r:'a casref) : (unit, 'a) t =               *)
+(*   lift (fun () -> !r)                                 *)
+(* As a matter of facts, I think read action in          *)
+(* interfaces should never be reagents.                  *)
+
+let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
+  let withReact rx next offer =
+    (commit next).withReact (rx >> Reaction.cas (r <:= updt)) Nope offer
+  in Reagent { withReact }
+(* Hmm but the actual cas will not be performed until the commit phase..    *)
+(* Yep! But this is not what reagents are for: composing actions atomically *)
+
+let post_commit (f:'a -> unit) : ('a, 'a) t =
+  let withReact rx next offer =
+    let pc = (fun () -> f (Reaction.get_value rx)) in
+    (commit next).withReact (Reaction.pc pc >> rx) Nope offer
   in Reagent { withReact }
 
 (* TODO: I am not fully satistied with the pair, I think the built up of *)
@@ -116,7 +120,7 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
   pipe (lift (fun a -> (a, a)))
        (pipe (first r1) (second r2))
 
-
+(* TODO: these are really bad choices, they overlap with Pervasives' operators *)
 module Sugar = struct
   let ( * ) = pair
   let ( || ) = choose
