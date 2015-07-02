@@ -1,6 +1,6 @@
 
-module Q = BasicConcurrentQueue
-
+module Q = ConcurrentQueue
+(* TODO: write real tests! *)
 let () =
   let q = Q.create () in
   assert (Q.try_pop q = None) ;
