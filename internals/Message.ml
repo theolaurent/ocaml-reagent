@@ -20,7 +20,7 @@ let send f =
     WithOffer (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
   in Reagent { withReact }
 
-let receive (M m) =
+let answer (M m) =
   let merge =
     let withReact rx next =
       (commit next).withReact ( rx >> Offer.rx_resume m.offer (Reaction.clear rx)
