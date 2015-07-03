@@ -129,6 +129,40 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
   pipe (lift (fun a -> (a, a)))
        (pipe (first r1) (second r2))
 
+
+type ('a, 'b, 'r) message_struct = { senderRx : 'a Reaction.t ;
+                                     senderK  : ('b, 'r) t    ;
+                                     offer    : 'r Offer.t    }
+type (_, _) message =
+  M : ('a, 'b, 'r) message_struct -> ('a, 'b) message
+
+let is_message_available (M m) =
+  Offer.is_waiting m.offer
+
+
+(* TODO: prevent getting twice the same message in a reaction. *)
+
+(* send is always blocking, it is to be used together with choose/atempt *)
+let send f =
+  let withReact rx next =
+    WithOffer (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
+  in Reagent { withReact }
+
+let answer (M m) =
+  let merge =
+    let withReact rx next =
+      (commit next).withReact ( rx >> Offer.rx_resume m.offer (Reaction.clear rx)
+                                   >> m.senderRx )
+                              (* The other reagent is given Reaction.inert,    *)
+                              (* it is this one's role to enforce the whole    *)
+                              (* reaction (i.e. both reactions and the         *)
+                              (* message passing).                             *)
+                              Nope
+    in Reagent { withReact }
+  in pipe m.senderK merge
+
+
+
 (* TODO: these are really bad choices, they overlap with Pervasives' operators *)
 module Sugar = struct
   let ( * ) = pair
