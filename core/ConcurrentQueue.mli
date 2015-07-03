@@ -3,7 +3,7 @@ type 'a t
 
 val create : unit -> 'a t
 
-val whole : 'a t -> 'a FQueue.t
+val fold : ('a -> 'b -> 'b) -> 'a t -> 'b -> 'b
 
 val push : 'a t -> ('a, unit) Reagent.t
 

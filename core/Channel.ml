@@ -3,9 +3,7 @@ open Reagent.Sugar
 
 (* TODO: what is the expected behaviour when posting on both *)
 (* sides of a channel?                                       *)
-
-(* TODO: multiple message answer via choose                  *)
-(*       also posting an offer on the channel ??             *)
+(* TODO: has_offer *)
 
 type ('a, 'b) endpoint = { outgoing : ('a, 'b) Message.t ConcurrentQueue.t ;
                            incoming : ('b, 'a) Message.t ConcurrentQueue.t }
@@ -24,7 +22,6 @@ let swap e =
                                                   Message.is_available) () in
   let push_message m = Reagent.run (ConcurrentQueue.push e.outgoing) m in
   (  Reagent.computed (fun a ->
-       let q = ConcurrentQueue.whole e.incoming in
           Reagent.constant a
-       |> FQueue.fold_right (fun m res -> Message.answer m || res) q Reagent.never)
+       |> ConcurrentQueue.fold (fun m res -> Message.answer m || res) e.incoming Reagent.never)
   || Message.send push_message )

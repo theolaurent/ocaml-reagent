@@ -13,7 +13,7 @@ type 'a t = 'a FQueue.t casref
 
 let create () = ref FQueue.empty
 
-let whole q = !q
+let fold f q = FQueue.fold_right f !q
 
 let push q =
   Reagent.computed (fun v -> let s = !q in
