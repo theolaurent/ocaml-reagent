@@ -14,14 +14,15 @@ type (_, _) t =
 let is_available (M m) =
   Offer.is_waiting m.offer
 
+(* send is always blocking, it is to be used together with choose/atempt *)
 let send f =
-  let withReact rx next offer =
-    f (M { senderRx = rx ; senderK = next ; offer = offer })
+  let withReact rx next =
+    WithOffer (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
   in Reagent { withReact }
 
 let receive (M m) =
   let merge =
-    let withReact rx next offer =
+    let withReact rx next =
       (commit next).withReact ( rx >> Offer.rx_resume m.offer (Reaction.clear rx)
                                    >> m.senderRx )
                               (* The other reagent is given Reaction.inert,    *)
@@ -29,6 +30,5 @@ let receive (M m) =
                               (* reaction (i.e. both reactions and the         *)
                               (* message passing).                             *)
                               Nope
-                              offer
     in Reagent { withReact }
   in m.senderK |> merge
