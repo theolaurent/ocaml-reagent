@@ -25,10 +25,7 @@ let pop q =
                                 let (v, n) = FQueue.pop s in
                                 Reagent.cas q (s --> n)
                                 |> Reagent.constant v
-                              with FQueue.Empty -> Reagent.never)
-                                (* TODO: transient fail                     *)
-                                (* failwith "MessageQueue.pop: \            *)
-                                (*           No transient failure for now." *)
+                              with FQueue.Empty -> Reagent.retry)
 
 let pop_until q f =
   let rec loop fq =

@@ -11,9 +11,15 @@ val constant : 'a -> ('b, 'a) t
 
 val never : ('a, 'b) t
 
+val retry : ('a, 'b) t
+
 val noop : ('a, 'a) t
 
 val lift : ('a -> 'b) -> ('a, 'b) t
+
+val lift_partial : ('a -> 'b option) -> ('a, 'b) t
+
+val attempt : ('a, 'b) t -> ('a, 'b option) t
 
 val computed : ('a -> (unit, 'b) t) -> ('a, 'b) t
 

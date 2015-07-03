@@ -6,7 +6,8 @@ open Reaction.Sugar
 
 type 'a result =
   | Imm of 'a Reaction.t
-  | WithOffer of ('a Offer.t -> unit)
+  | Block of ('a Offer.t -> unit)
+  | Retry of ('a Offer.t -> unit) option
 
 (* TODO: variance *)
 type ('a, 'b) t_struct = {
@@ -31,12 +32,32 @@ let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
 
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
-  let rx = match (commit r).withReact (rx_return arg) Nope with
-    | Imm rx -> rx
-    | WithOffer f -> Offer.suspend f
-        (* TODO: Retry *)
-  in if !! rx then rx_value rx
-     else failwith "Reagent.run: No transient failure for now."
+  let wait () = (* TODO: exponential wait *)
+    perform Sched.Yield
+  in
+  let rec retry_offer_loop offer =
+    match (commit r).withReact (rx_return arg) Nope with
+    | Imm rx  -> ignore (Offer.try_resume offer rx)
+    | Block f -> f offer
+    | Retry None
+    | Retry (Some _) -> (* for space complexity reasons, the offer is *)
+                        (* assumed to be already posted               *)
+                        ( wait () ; retry_offer_loop offer )
+  in
+  let rec retry_loop () =
+    let rx = match (commit r).withReact (rx_return arg) Nope with
+      | Imm rx -> Some rx
+      | Block f -> Some (Offer.suspend f)
+      | Retry None -> None
+      | Retry Some f ->
+         (* TODO: this is a hack, do things properly *)
+         Some (Offer.suspend
+                 (fun o -> f o ; perform (Sched.Fork
+                                            (fun () -> retry_offer_loop o))))
+    in match rx with
+       | Some rx when !! rx -> rx_value rx
+       | _ -> ( wait () ; retry_loop () )
+  in retry_loop ()
 
 
 (* TODO: think about what happen with (swap enpoint a) >> (swap enpoint b)  *)
@@ -53,10 +74,27 @@ let rec pipe : type a b c . (a, b) t -> (b, c) t -> (a, c) t =
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
   let withReact rx next = match (commit r1).withReact rx next with
     | Imm rx1 -> Imm rx1
-    | WithOffer f -> begin match (commit r2).withReact rx next with
-                           | Imm rx2 -> Imm rx2
-                           | WithOffer g -> WithOffer (fun o -> f o ; g o)
-                     end
+    | Block f ->
+       begin match (commit r2).withReact rx next with
+             | Imm rx2 -> Imm rx2
+             | Block g -> Block (fun o -> f o ; g o)
+             | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
+             | Retry None -> Retry (Some f)
+       end
+    | Retry (Some f) ->
+       begin match (commit r2).withReact rx next with
+             | Imm rx2 -> Imm rx2
+             | Block g
+             | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
+             | Retry None -> Retry (Some f)
+       end
+    | Retry None ->
+       begin match (commit r2).withReact rx next with
+             | Imm rx2 -> Imm rx2
+             | Block g
+             | Retry (Some g) -> Retry (Some g)
+             | Retry None -> Retry None
+       end
   in Reagent { withReact }
 
 let constant (x:'a) : ('b, 'a) t =
@@ -65,7 +103,11 @@ let constant (x:'a) : ('b, 'a) t =
   in Reagent { withReact }
 
 let never : ('a, 'b) t =
-  let withReact _ _ = WithOffer (fun _ -> ())
+  let withReact _ _ = Block (fun _ -> ())
+  in Reagent { withReact }
+
+let retry : ('a, 'b) t =
+  let withReact _ _ = Retry None
   in Reagent { withReact }
 
 (* this one in not equivalent to Nope, it has a next. *)
@@ -75,9 +117,6 @@ let noop : ('a, 'a) t =
   in Reagent { withReact }
 
 
-(* f is total for the moment (contrary to the scala version of lift) *)
-(* TODO: when trasient failure, partial, with option and / or exn    *)
-(*                                                                   *)
 (* Be careful with lift and computed, their behaviour can be non-    *)
 (* intuistic when sequenced. Remember that a reaction is two-phased. *)
 let lift (f:'a -> 'b) : ('a, 'b) t =
@@ -89,6 +128,16 @@ let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
   let withReact rx next =
     (commit (f (rx_value rx))).withReact (rx >> rx_return ()) next
   in Reagent { withReact }
+
+
+let attempt (r:('a, 'b) t) : ('a, 'b option) t =
+  choose (pipe r (lift (fun x -> Some x))) (constant None)
+
+(* if you want retry version, use this one with choose retry! *)
+let lift_partial (f:'a -> 'b option) : ('a, 'b) t =
+  computed (fun a -> match f a with
+                     | None -> never
+                     | Some x -> constant x)
 
 
 (* I don't know if read should be a reagent. It is       *)
@@ -146,7 +195,7 @@ let is_message_available (M m) =
 (* send is always blocking, it is to be used together with choose/atempt *)
 let send f =
   let withReact rx next =
-    WithOffer (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
+    Block (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
   in Reagent { withReact }
 
 let answer (M m) =
