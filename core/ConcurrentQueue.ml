@@ -28,6 +28,13 @@ let pop q =
                                 failwith "MessageQueue.pop: \
                                           No transient failure for now.")
 
-let rec pop_until q f =
-  top q |> Reagent.computed (fun v -> if f v then Reagent.constant v
-                                      else pop q |> Reagent.lift ignore |> pop_until q f)
+let pop_until q f =
+  let rec loop fq =
+    try
+      let (v, n) = FQueue.pop fq in
+      if not (f v) then loop n
+      else fq
+    with FQueue.Empty -> fq
+  in
+  Reagent.computed (fun () -> let s = !q in
+                              Reagent.cas q (s --> loop s))
