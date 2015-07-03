@@ -37,8 +37,8 @@ let bind r1 f =
 let map f r = bind r (fun x -> return (f x))
 
 module Sugar = struct
-  let return = return
-  let get_value = get_value
+  let rx_return = return
+  let rx_value = get_value
   let ( >>= ) = bind
   let ( >> ) x y = bind x (fun _ -> y)
   let ( !! ) = try_commit

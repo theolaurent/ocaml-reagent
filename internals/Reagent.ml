@@ -8,6 +8,7 @@ type 'a result =
   | Imm of 'a Reaction.t
   | WithOffer of ('a Offer.t -> unit)
 
+(* TODO: variance *)
 type ('a, 'b) t_struct = {
     withReact : 'r . 'a Reaction.t -> ('b, 'r) t -> 'r result
   }
@@ -30,11 +31,11 @@ let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
 
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
-  let rx = match (commit r).withReact (return arg) Nope with
+  let rx = match (commit r).withReact (rx_return arg) Nope with
     | Imm rx -> rx
     | WithOffer f -> Offer.suspend f
         (* TODO: Retry *)
-  in if !! rx then Reaction.get_value rx
+  in if !! rx then rx_value rx
      else failwith "Reagent.run: No transient failure for now."
 
 
@@ -60,7 +61,7 @@ let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
 
 let constant (x:'a) : ('b, 'a) t =
   let withReact rx next =
-    (commit next).withReact (rx >> return x) Nope
+    (commit next).withReact (rx >> rx_return x) Nope
   in Reagent { withReact }
 
 let never : ('a, 'b) t =
@@ -86,7 +87,7 @@ let lift (f:'a -> 'b) : ('a, 'b) t =
 
 let computed (f:('a -> (unit, 'b) t)) : ('a, 'b) t =
   let withReact rx next =
-    (commit (f (Reaction.get_value rx))).withReact (rx >> return ()) next
+    (commit (f (rx_value rx))).withReact (rx >> rx_return ()) next
   in Reagent { withReact }
 
 
@@ -107,7 +108,7 @@ let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
 
 let post_commit (f:'a -> unit) : ('a, 'a) t =
   let withReact rx next =
-    let pc = (fun () -> f (Reaction.get_value rx)) in
+    let pc = (fun () -> f (rx_value rx)) in
     (commit next).withReact (Reaction.pc pc >> rx) Nope
   in Reagent { withReact }
 
@@ -115,14 +116,14 @@ let post_commit (f:'a -> unit) : ('a, 'a) t =
 (* the reaction might be concurrent... (not as in the scala version!)    *)
 let first (r:('a, 'b) t) : ('a * 'c, 'b * 'c) t =
   let withReact rx next =
-    let (a, c) = Reaction.get_value rx in
-    (commit (pipe r (lift (fun b -> (b, c))))).withReact (rx >> return a) next
+    let (a, c) = rx_value rx in
+    (commit (pipe r (lift (fun b -> (b, c))))).withReact (rx >> rx_return a) next
   in Reagent { withReact }
 
 let second (r:('a, 'b) t) : ('c * 'a, 'c * 'b) t =
   let withReact rx next =
-    let (c, a) = Reaction.get_value rx in
-    (commit (pipe r (lift (fun b -> (c, b))))).withReact (rx >> return a) next
+    let (c, a) = rx_value rx in
+    (commit (pipe r (lift (fun b -> (c, b))))).withReact (rx >> rx_return a) next
   in Reagent { withReact }
 
 let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
