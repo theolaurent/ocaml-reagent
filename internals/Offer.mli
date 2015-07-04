@@ -1,14 +1,16 @@
 
 type 'a t
 
+type id
+
+val id : 'a t -> id
+
 val is_waiting : 'a t -> bool
 
 val wake : 'a t -> unit -> unit
 
-val complete_cas : 'a t -> 'a Reaction.t -> CAS.t
+val complete_cas : 'a t -> 'a -> CAS.t
 
-val suspend : ('a t -> unit) -> 'a Reaction.t
+val suspend : ('a t -> unit) -> 'a
 
-val try_resume : 'a t -> 'a Reaction.t -> bool
-
-val rx_resume : 'a t -> 'a Reaction.t -> unit Reaction.t
+val try_resume : 'a t -> 'a -> bool

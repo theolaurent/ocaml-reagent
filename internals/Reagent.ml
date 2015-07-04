@@ -6,8 +6,8 @@ open Reaction.Sugar
 
 type 'a result =
   | Imm of 'a Reaction.t
-  | Block of ('a Offer.t -> unit)
-  | Retry of ('a Offer.t -> unit) option
+  | Block of ('a Reaction.t Offer.t -> unit)
+  | Retry of ('a Reaction.t Offer.t -> unit) option
 
 (* TODO: variance *)
 type ('a, 'b) t_struct = {
@@ -70,7 +70,7 @@ let rec pipe : type a b c . (a, b) t -> (b, c) t -> (a, c) t =
              (commit r1).withReact rx (pipe r2 next)
            in Reagent { withReact }
 
-(* TODO: Also a concurrent (and thus symetric) choose.                      *)
+(* TODO: Also write a concurrent (and thus symetric) choose.                *)
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
   let withReact rx next = match (commit r1).withReact rx next with
     | Imm rx1 -> Imm rx1
@@ -182,7 +182,7 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
 
 type ('a, 'b, 'r) message_struct = { senderRx : 'a Reaction.t ;
                                      senderK  : ('b, 'r) t    ;
-                                     offer    : 'r Offer.t    }
+                                     offer    : 'r Reaction.t Offer.t    }
 type (_, _) message =
   M : ('a, 'b, 'r) message_struct -> ('a, 'b) message
 
@@ -190,24 +190,27 @@ let is_message_available (M m) =
   Offer.is_waiting m.offer
 
 
-(* TODO: prevent getting twice the same message in a reaction. *)
-
 (* send is always blocking, it is to be used together with choose/atempt *)
 let send f =
   let withReact rx next =
     Block (fun offer -> f (M { senderRx = rx ; senderK = next ; offer = offer }))
   in Reagent { withReact }
 
+(* TODO: document that it will block indefinetly if the offer of *)
+(* the message is already is part of the reaction.               *)
+(* This is to be used with attemps/choose.                       *)
 let answer (M m) =
   let merge =
     let withReact rx next =
-      (commit next).withReact ( rx >> Offer.rx_resume m.offer (Reaction.clear rx)
-                                   >> m.senderRx )
-                              (* The other reagent is given Reaction.inert,    *)
-                              (* it is this one's role to enforce the whole    *)
-                              (* reaction (i.e. both reactions and the         *)
-                              (* message passing).                             *)
-                              Nope
+      if Reaction.has_offer rx m.offer then Block (fun _ -> ())
+      else
+        (commit next).withReact ( rx >> Reaction.completion m.offer (Reaction.clear rx)
+                                     >> m.senderRx )
+                                (* The other reagent is given Reaction.inert,    *)
+                                (* it is this one's role to enforce the whole    *)
+                                (* reaction (i.e. both reactions and the         *)
+                                (* message passing).                             *)
+                                Nope
     in Reagent { withReact }
   in pipe m.senderK merge
 

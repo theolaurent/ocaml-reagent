@@ -1,17 +1,23 @@
 
 open CAS.Sugar
-open Reaction.Sugar
 
 type 'a status =
   | Waiting
-  | Completed of 'a Reaction.t
+  | Completed of 'a
   | WakedUp
 
 (* The thread is suposed to be resumed only once, and when    *)
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
-type 'a t = { state  : 'a status casref             ;
-              thread : 'a Reaction.t Sched.cont }
+type 'a t = { state  : 'a status casref ;
+              thread : 'a Sched.cont    }
+
+type id = int
+
+let id o = ((Obj.magic o):int)
+(* I use Obj.magic because I don't want offers to carry an id, *)
+(* for perfomance resons. Indeed, enforcing the uniqueness     *)
+(* would require the update of a CAS reference.                *)
 
 let is_waiting o = match !(o.state) with
   | Waiting -> true
@@ -34,5 +40,3 @@ let suspend f =
 let try_resume o a =
   if CAS.commit (complete_cas o a) then ( wake o () ; true )
   else false
-
-let rx_resume o a = Reaction.cas (complete_cas o a) >> Reaction.pc (wake o)
