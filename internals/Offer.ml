@@ -13,6 +13,7 @@ type 'a t = { state  : 'a status casref ;
               thread : 'a Sched.cont    ;
               id     : int              }
 
+(* TODO: why not (how to?) use the thread id + a thread local variable? *)
 let count = ref 0
 
 let rec make k =
