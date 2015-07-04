@@ -10,14 +10,20 @@ type 'a status =
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
 type 'a t = { state  : 'a status casref ;
-              thread : 'a Sched.cont    }
+              thread : 'a Sched.cont    ;
+              id     : int              }
+
+let count = ref 0
+
+let rec make k =
+  let s = !count in
+  if (count <!= s --> (s + 1)) then
+    { state = ref Waiting ; thread = k ; id = s }
+  else make k (* TODO : exponential wait? *)
 
 type id = int
 
-let id o = ((Obj.magic o):int)
-(* I use Obj.magic because I don't want offers to carry an id, *)
-(* for perfomance resons. Indeed, enforcing the uniqueness     *)
-(* would require the update of a CAS reference.                *)
+let id o = o.id
 
 let is_waiting o = match !(o.state) with
   | Waiting -> true
@@ -35,7 +41,7 @@ let complete_cas o a = (o.state <:= Waiting --> Completed a)
 
 
 let suspend f =
-  perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
+  perform (Sched.Suspend (fun k -> f (make k)))
 
 let try_resume o a =
   if CAS.commit (complete_cas o a) then ( wake o () ; true )
