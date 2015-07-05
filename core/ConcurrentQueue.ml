@@ -37,3 +37,10 @@ let pop_until q f =
   in
   Reagent.computed (fun () -> let s = !q in
                               Reagent.cas q (s --> loop s))
+
+
+type 'a cursor = 'a FQueue.t
+
+let snapshot q = !q
+
+let next c = try Some (FQueue.pop c) with FQueue.Empty -> None
