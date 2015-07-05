@@ -20,6 +20,12 @@ let create () =
 let swap e =
   let () = Reagent.run (ConcurrentQueue.pop_until e.incoming
                                                   Reagent.is_message_available) () in
+  let rec all_messages c =
+    match ConcurrentQueue.next c with
+    | None -> Reagent.never
+    | Some (m, nc) -> (* use Reagent.computed to get lazyness! *)
+       Reagent.computed (fun a -> Reagent.constant a |> (Reagent.answer m
+                                                         || all_messages nc))
+  in
   let push_message m = Reagent.run (ConcurrentQueue.push e.outgoing) m in
-  ( ConcurrentQueue.fold (fun m res -> Reagent.answer m || res) e.incoming Reagent.never
-  || Reagent.send push_message )
+  all_messages (ConcurrentQueue.snapshot e.incoming) || Reagent.send push_message
