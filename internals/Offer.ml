@@ -10,21 +10,7 @@ type 'a status =
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
 type 'a t = { state  : 'a status casref ;
-              thread : 'a Sched.cont    ;
-              id     : int              }
-
-(* TODO: why not (how to?) use the thread id + a thread local variable? *)
-let count = ref 0
-
-let rec make k =
-  let s = !count in
-  if (count <!= s --> (s + 1)) then
-    { state = ref Waiting ; thread = k ; id = s }
-  else make k (* TODO : exponential wait? *)
-
-type id = int
-
-let id o = o.id
+              thread : 'a Sched.cont    }
 
 let is_waiting o = match !(o.state) with
   | Waiting -> true
@@ -40,9 +26,10 @@ let wake o () =
 
 let complete_cas o a = (o.state <:= Waiting --> Completed a)
 
+let refid o = CAS.id o.state
 
 let suspend f =
-  perform (Sched.Suspend (fun k -> f (make k)))
+  perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
 
 let try_resume o a =
   if CAS.commit (complete_cas o a) then ( wake o () ; true )
