@@ -7,12 +7,17 @@ type 'a state =
   | Normal of 'a
   | OnGoingKCAS of 'a
 
-type 'a ref = { mutable content : 'a state }
+type 'a ref = { mutable content : 'a state ;
+                        id      : int      }
 
 let compare_and_swap r x y =
   Obj.compare_and_swap_field (Obj.repr r) 0 (Obj.repr x) (Obj.repr y)
+                             (* 0 stands for the first field *)
 
-let ref x = { content = Normal x }
+let ref x = { content = Normal x           ;
+              id      = Oo.id (object end) }
+            (* I've been told this is supposed *)
+            (* to be a thread-safe unique id   *)
 
 let get r = match r.content with
   | Normal a -> a
