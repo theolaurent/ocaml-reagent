@@ -3,7 +3,11 @@ type 'a ref
 
 type 'a updt = { expect : 'a ; update : 'a }
 
+type refid
+
 val ref : 'a -> 'a ref
+
+val id : 'a ref -> refid
 
 val get : 'a ref -> 'a
 
