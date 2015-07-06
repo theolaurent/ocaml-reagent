@@ -5,9 +5,12 @@ open Reaction.Sugar
 (* TODO: optim when only one cas                       *)
 
 type 'a result =
-  | Imm of 'a Reaction.t
-  | Block of ('a Reaction.t Offer.t -> unit)
-  | Retry of ('a Reaction.t Offer.t -> unit) option
+  | Imm of 'a
+  | Block of ('a Offer.t -> unit)
+  | Retry of ('a Offer.t -> unit) option
+(* When blocking/retrying, the offer should always be embedded in a message *)
+(* or completely ignored, but it should never be fulfilled without taking   *)
+(* of the reaction.                                                         *)
 
 (* TODO: variance *)
 type ('a, 'b) t_struct = {
@@ -24,7 +27,7 @@ and (_, _) t =
 let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
   | Nope -> let withReact (type c) (type r) (rx:c Reaction.t)
                           (next:(c, r) t) : r result = match next with
-              | Nope -> Imm rx
+              | Nope -> if !! rx then Imm (rx_value rx) else Retry None
               | _    -> (commit next).withReact rx Nope
             in { withReact }
   | Reagent r -> r
@@ -37,7 +40,7 @@ let run (r:('a, 'b) t) (arg:'a) : 'b =
   in
   let rec retry_offer_loop offer =
     match (commit r).withReact (rx_return arg) Nope with
-    | Imm rx  -> ignore (Offer.try_resume offer rx)
+    | Imm x  -> ignore (Offer.try_resume offer x)
     | Block f -> f offer
     | Retry None
     | Retry (Some _) -> (* for space complexity reasons, the offer is *)
@@ -45,18 +48,15 @@ let run (r:('a, 'b) t) (arg:'a) : 'b =
                         ( wait () ; retry_offer_loop offer )
   in
   let rec retry_loop () =
-    let rx = match (commit r).withReact (rx_return arg) Nope with
-      | Imm rx -> Some rx
-      | Block f -> Some (Offer.suspend f)
-      | Retry None -> None
+    match (commit r).withReact (rx_return arg) Nope with
+      | Imm x -> x
+      | Block f -> Offer.suspend f
+      | Retry None -> ( wait () ; retry_loop () )
       | Retry Some f ->
          (* TODO: this is a hack, do things properly *)
-         Some (Offer.suspend
-                 (fun o -> f o ; perform (Sched.Fork
-                                            (fun () -> retry_offer_loop o))))
-    in match rx with
-       | Some rx when !! rx -> rx_value rx
-       | _ -> ( wait () ; retry_loop () )
+         (Offer.suspend
+            (fun o -> f o ; perform (Sched.Fork
+                                       (fun () -> retry_offer_loop o))))
   in retry_loop ()
 
 
@@ -73,24 +73,24 @@ let rec pipe : type a b c . (a, b) t -> (b, c) t -> (a, c) t =
 (* TODO: Also write a concurrent (and thus symetric) choose.                *)
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
   let withReact rx next = match (commit r1).withReact rx next with
-    | Imm rx1 -> Imm rx1
+    | Imm x1 -> Imm x1
     | Block f ->
        begin match (commit r2).withReact rx next with
-             | Imm rx2 -> Imm rx2
+             | Imm x2 -> Imm x2
              | Block g -> Block (fun o -> f o ; g o)
              | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
              | Retry None -> Retry (Some f)
        end
     | Retry (Some f) ->
        begin match (commit r2).withReact rx next with
-             | Imm rx2 -> Imm rx2
+             | Imm x2 -> Imm x2
              | Block g
              | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
              | Retry None -> Retry (Some f)
        end
     | Retry None ->
        begin match (commit r2).withReact rx next with
-             | Imm rx2 -> Imm rx2
+             | Imm x2 -> Imm x2
              | Block g
              | Retry (Some g) -> Retry (Some g)
              | Retry None -> Retry None
@@ -182,7 +182,7 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
 
 type ('a, 'b, 'r) message_struct = { senderRx : 'a Reaction.t ;
                                      senderK  : ('b, 'r) t    ;
-                                     offer    : 'r Reaction.t Offer.t    }
+                                     offer    : 'r Offer.t    }
 type (_, _) message =
   M : ('a, 'b, 'r) message_struct -> ('a, 'b) message
 
@@ -204,7 +204,7 @@ let answer (M m) =
     let withReact rx next =
       if Reaction.has_offer rx m.offer then Block (fun _ -> ())
       else
-        (commit next).withReact ( rx >> Reaction.completion m.offer (Reaction.clear rx)
+        (commit next).withReact ( rx >> Reaction.completion m.offer (rx_value rx)
                                      >> m.senderRx )
                                 (* The other reagent is given Reaction.inert,    *)
                                 (* it is this one's role to enforce the whole    *)
