@@ -44,14 +44,12 @@ let pop q =
   )
 
 let rec pop_until q f =
-  (  Reagent.attempt (pop q)
-  |> Reagent.computed (fun x -> match x with
-       | None   -> Reagent.constant ()
-       | Some v when not (f v)
-                -> Reagent.post_commit (Reagent.run (pop_until q f))
-                  (* use post commit to pop 1-by-1, more efficient that kCAS *)
-       | Some _ -> Reagent.never
-  ) ) || Reagent.constant ()
+  (  pop q |> Reagent.computed (fun x ->
+                if f x then Reagent.never
+                else Reagent.post_commit (Reagent.run (pop_until q f))
+                (* use post commit to pop 1-by-1, more efficient that kCAS *)
+              )
+  ) || Reagent.constant ()
 
 type 'a cursor = 'a node
 
