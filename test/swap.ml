@@ -12,7 +12,7 @@ let main () =
   printf "**** Test 1 ****\n%!";
   let (ep1,ep2) = Channel.create () in
   fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 |> Channel.swap ep1) 0);
+    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
   fork (fun () -> printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 1);
   printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 2;
 
@@ -22,7 +22,7 @@ let main () =
   printf "**** Test 2 ****\n%!";
   let (ep1,ep2) = Channel.create () in
   fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 || Channel.swap ep2) 0);
+    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >+> Channel.swap ep2) 0);
   printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 1;
 
   (* Test 3 *)
@@ -31,9 +31,9 @@ let main () =
   printf "**** Test 3 ****\n%!";
   let (ep1,ep2) = Channel.create () in
   fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 |> Channel.swap ep1) 0);
+    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
   printf "will fail! Reagents are not as powerful as communicating transactions!\n";
-  printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2 |> Channel.swap ep2) 1;
+  printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2 >>> Channel.swap ep2) 1;
   printf "should not see this!\n";
   ()
 

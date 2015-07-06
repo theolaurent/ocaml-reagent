@@ -21,8 +21,8 @@ let pop q =
   Reagent.computed (fun () -> try
                                 let s = !q in
                                 let (v, n) = FQueue.pop s in
-                                Reagent.cas q (s --> n)
-                                |> Reagent.constant v
+                                    Reagent.cas q (s --> n)
+                                >>> Reagent.constant v
                               with FQueue.Empty -> Reagent.retry)
 
 let pop_until q f =

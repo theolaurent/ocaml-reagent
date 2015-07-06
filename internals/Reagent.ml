@@ -218,7 +218,7 @@ let answer (M m) =
 
 (* TODO: these are really bad choices, they overlap with Pervasives' operators *)
 module Sugar = struct
-  let ( * ) = pair
-  let ( || ) = choose
-  let ( |> ) = pipe
+  let ( >*> ) = pair
+  let ( >+> ) = choose
+  let ( >>> ) = pipe
 end

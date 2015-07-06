@@ -24,8 +24,8 @@ let swap e =
     match ConcurrentQueue.next c with
     | None -> Reagent.never
     | Some (m, nc) -> (* use Reagent.computed to get lazyness! *)
-       Reagent.computed (fun a -> Reagent.constant a |> (Reagent.answer m
-                                                         || all_messages nc))
+       Reagent.computed (fun a -> Reagent.constant a >>> (    Reagent.answer m
+                                                          >+> all_messages nc  ))
   in
   let push_message m = Reagent.run (ConcurrentQueue.push e.outgoing) m in
-  all_messages (ConcurrentQueue.snapshot e.incoming) || Reagent.send push_message
+  all_messages (ConcurrentQueue.snapshot e.incoming) >+> Reagent.send push_message

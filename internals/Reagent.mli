@@ -39,7 +39,7 @@ val answer : ('a, 'b) message -> ('b, 'a) t
 
 module Sugar :
   sig
-    val ( * ) : ('a, 'b) t -> ('a, 'c) t -> ('a, 'b * 'c) t
-    val ( || ) : ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
-    val ( |> ) : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
+    val ( >*> ) : ('a, 'b) t -> ('a, 'c) t -> ('a, 'b * 'c) t
+    val ( >+> ) : ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
+    val ( >>> ) : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
   end

@@ -18,10 +18,10 @@ let push q =
     let s = !(tail) in
     match s with
     | None             -> Reagent.cas head (None --> newnode)
-                       |> Reagent.cas tail (None --> newnode)
+                      >>> Reagent.cas tail (None --> newnode)
     | Some (_, N node) -> assert (!node = None) ;
                           Reagent.cas tail (s    --> newnode)
-                       |> Reagent.cas node (None --> newnode)
+                      >>> Reagent.cas node (None --> newnode)
   )
 
 (* TODO: I feel this pop reagent could be written in a more elegant way *)
@@ -36,20 +36,20 @@ let pop q =
        let s' = !node in
        begin match s' with
              | None   -> Reagent.cas head (s --> None)
-                      |> Reagent.cas tail (s --> None)
-                      |> Reagent.constant v
+                     >>> Reagent.cas tail (s --> None)
+                     >>> Reagent.constant v
              | Some _ -> Reagent.cas head (s --> s'  )
-                      |> Reagent.constant v
+                     >>> Reagent.constant v
        end
   )
 
 let rec pop_until q f =
-  (  pop q |> Reagent.computed (fun x ->
-                if f x then Reagent.never
-                else Reagent.post_commit (Reagent.run (pop_until q f))
-                (* use post commit to pop 1-by-1, more efficient that kCAS *)
-              )
-  ) || Reagent.constant ()
+  (  pop q >>> Reagent.computed (fun x ->
+                 if f x then Reagent.never
+                 else Reagent.post_commit (Reagent.run (pop_until q f))
+                 (* use post commit to pop 1-by-1, more efficient that kCAS *)
+               )
+  ) >+> Reagent.constant ()
 
 type 'a cursor = 'a node
 
