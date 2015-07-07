@@ -13,16 +13,6 @@ let has_cas rx (CAS.CAS (r, _)) =
   let id = CAS.id r in
   List.exists (fun (CAS.CAS (r, _)) -> CAS.id r = id) rx.cas_list
 
-let has_offer rx o =
-  let id = Offer.refid o in
-  List.exists (fun (CAS.CAS (r, _)) -> CAS.id r = id) rx.cas_list
-
-
-let completion o a =
-  { cas_list = [ Offer.complete_cas o a ] ;
-    pc_list  = [ Offer.wake o           ] ;
-    result   = ()                         }
-
 let try_commit r =
   let success = match r.cas_list with
     | [] -> true

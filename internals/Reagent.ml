@@ -205,9 +205,10 @@ let send f =
 let answer (M m) =
   let merge =
     let withReact rx next =
-      if Reaction.has_offer rx m.offer then Block (fun _ -> ())
+      let cas = Offer.complete_cas m.offer (rx_value rx) in
+      if Reaction.has_cas rx cas then Block (fun _ -> ())
       else
-        (commit next).withReact ( rx >> Reaction.completion m.offer (rx_value rx)
+        (commit next).withReact ( rx >> Reaction.cas cas >> Reaction.pc (Offer.wake m.offer)
                                      >> m.senderRx )
                                 (* The other reagent is given Reaction.inert,    *)
                                 (* it is this one's role to enforce the whole    *)
@@ -217,9 +218,6 @@ let answer (M m) =
     in Reagent { withReact }
   in pipe m.senderK merge
 
-
-
-(* TODO: these are really bad choices, they overlap with Pervasives' operators *)
 module Sugar = struct
   let ( >*> ) = pair
   let ( >+> ) = choose

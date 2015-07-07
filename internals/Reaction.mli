@@ -4,11 +4,7 @@ val cas : CAS.t -> unit t
 
 val pc : (unit -> unit) -> unit t
 
-val completion : 'a Offer.t -> 'a -> unit t
-
 val has_cas : 'a t -> CAS.t -> bool
-
-val has_offer : 'a t -> 'b Offer.t -> bool
 
 val try_commit : 'a t -> bool
 
