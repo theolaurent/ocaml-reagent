@@ -6,11 +6,12 @@ open Reaction.Sugar
 
 type 'a result =
   | Imm of 'a
+  | Retry
   | Block of ('a Offer.t -> unit)
-  | Retry of ('a Offer.t -> unit) option
+  | BlockOrRetry of ('a Offer.t -> unit)
 (* When blocking/retrying, the offer should always be embedded in a message *)
 (* or completely ignored, but it should never be fulfilled without taking   *)
-(* of the reaction.                                                         *)
+(* care of the reaction.                                                    *)
 
 (* TODO: variance *)
 type ('a, 'b) t_struct = {
@@ -23,44 +24,15 @@ and (_, _) t =
   | Nope : ('a, 'a) t
   | Reagent : ('a, 'b) t_struct -> ('a, 'b) t
 
-
 let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
   | Nope -> let withReact (type c) (type r) (rx:c Reaction.t)
                           (next:(c, r) t) : r result = match next with
-              | Nope -> if !! rx then Imm (rx_value rx) else Retry None
+              | Nope -> if !! rx then Imm (rx_value rx) else Retry
               | _    -> (commit next).withReact rx Nope
             in { withReact }
   | Reagent r -> r
 
-
-
-let run (r:('a, 'b) t) (arg:'a) : 'b =
-  let wait () = (* TODO: exponential wait *)
-    perform Sched.Yield
-  in
-  let rec retry_offer_loop offer =
-    match (commit r).withReact (rx_return arg) Nope with
-    | Imm x  -> ignore (Offer.try_resume offer x)
-    (* TODO: STOOOP! There is a problem here, a reaction can be *)
-    (* commited several time!!                                  *)
-    | Block f -> f offer
-    | Retry None
-    | Retry (Some _) -> (* for space complexity reasons, the offer is *)
-                        (* assumed to be already posted               *)
-                        ( wait () ; retry_offer_loop offer )
-  in
-  let rec retry_loop () =
-    match (commit r).withReact (rx_return arg) Nope with
-      | Imm x -> x
-      | Block f -> Offer.suspend f
-      | Retry None -> ( wait () ; retry_loop () )
-      | Retry Some f ->
-         (* TODO: this is a hack, do things properly *)
-         (Offer.suspend
-            (fun o -> f o ; perform (Sched.Fork
-                                       (fun () -> retry_offer_loop o))))
-  in retry_loop ()
-
+(*** Core combinators ***)
 
 (* TODO: think about what happen with (swap enpoint a) >> (swap enpoint b)  *)
 (* and the channel is empty: it will block ; should it atomically exchange? *)
@@ -76,26 +48,26 @@ let rec pipe : type a b c . (a, b) t -> (b, c) t -> (a, c) t =
 let choose (r1:('a, 'b) t) (r2:('a, 'b) t) : ('a, 'b) t =
   let withReact rx next = match (commit r1).withReact rx next with
     | Imm x1 -> Imm x1
+    | Retry ->
+       begin match (commit r2).withReact rx next with
+             | Imm x2 -> Imm x2
+             | Retry -> Retry
+             | Block g
+             | BlockOrRetry g -> BlockOrRetry g
+       end
     | Block f ->
        begin match (commit r2).withReact rx next with
              | Imm x2 -> Imm x2
+             | Retry -> BlockOrRetry f
              | Block g -> Block (fun o -> f o ; g o)
-             | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
-             | Retry None -> Retry (Some f)
+             | BlockOrRetry g -> BlockOrRetry (fun o -> f o ; g o)
        end
-    | Retry (Some f) ->
+    | BlockOrRetry f ->
        begin match (commit r2).withReact rx next with
              | Imm x2 -> Imm x2
+             | Retry -> BlockOrRetry f
              | Block g
-             | Retry (Some g) -> Retry (Some (fun o -> f o ; g o))
-             | Retry None -> Retry (Some f)
-       end
-    | Retry None ->
-       begin match (commit r2).withReact rx next with
-             | Imm x2 -> Imm x2
-             | Block g
-             | Retry (Some g) -> Retry (Some g)
-             | Retry None -> Retry None
+             | BlockOrRetry g -> BlockOrRetry (fun o -> f o ; g o)
        end
   in Reagent { withReact }
 
@@ -109,7 +81,7 @@ let never : ('a, 'b) t =
   in Reagent { withReact }
 
 let retry : ('a, 'b) t =
-  let withReact _ _ = Retry None
+  let withReact _ _ = Retry
   in Reagent { withReact }
 
 (* this one in not equivalent to Nope, it has a next. *)
@@ -185,6 +157,7 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
   pipe (lift (fun a -> (a, a)))
        (pipe (first r1) (second r2))
 
+(*** Message passing ***)
 
 type ('a, 'b, 'r) message_struct = { senderRx : 'a Reaction.t ;
                                      senderK  : ('b, 'r) t    ;
@@ -219,6 +192,37 @@ let answer (M m) =
                                 Nope
     in Reagent { withReact }
   in pipe m.senderK merge
+
+
+(*** Running reagents ***)
+
+let run (r:('a, 'b) t) (arg:'a) : 'b =
+  let wait () = (* TODO: exponential wait *)
+    perform Sched.Yield
+  in
+  let rec retry_offer_loop offer =
+    match (commit r).withReact (rx_return arg) Nope with
+    | _ -> failwith "TODO"
+    (* | Imm x  -> ignore (Offer.try_resume offer x) *)
+    (* (\* TODO: STOOOP! There is a problem here, a reaction can be *\) *)
+    (* (\* commited several time!!                                  *\) *)
+    (* | Block f -> f offer *)
+    (* | Retry None *)
+    (* | Retry (Some _) -> (\* for space complexity reasons, the offer is *\) *)
+    (*                     (\* assumed to be already posted               *\) *)
+    (*                     ( wait () ; retry_offer_loop offer ) *)
+  in
+  let rec retry_loop () =
+    match (commit r).withReact (rx_return arg) Nope with
+      | Imm x -> x
+      | Retry -> ( wait () ; retry_loop () )
+      | Block f -> Offer.suspend f
+      | BlockOrRetry f ->
+         (* TODO: this is a hack, do things properly *)
+         (Offer.suspend
+            (fun o -> f o ; perform (Sched.Fork
+                                       (fun () -> retry_offer_loop o))))
+  in retry_loop ()
 
 module Sugar = struct
   let ( >*> ) = pair
