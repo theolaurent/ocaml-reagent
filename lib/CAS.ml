@@ -19,12 +19,17 @@ let ref x = { content = Normal x           ;
             (* I've been told this is supposed *)
             (* to be a thread-safe unique id   *)
 
+type refid = int
+
+let id r = r.id
+
 let get r = match r.content with
   | Normal a -> a
   | OnGoingKCAS a -> a
 
 type t =
   | CAS : 'a ref * 'a updt -> t
+
 
 let commit (CAS (r, { expect ; update })) =
   let s = r.content in

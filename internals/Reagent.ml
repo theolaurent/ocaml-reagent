@@ -149,11 +149,15 @@ let lift_partial (f:'a -> 'b option) : ('a, 'b) t =
 
 let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
   let withReact rx next =
-    (commit next).withReact (rx >> Reaction.cas (r <:= updt)) Nope
+    let cas = (r <:= updt) in
+    if Reaction.has_cas rx cas then Block (fun _ -> ())
+    else (commit next).withReact (rx >> Reaction.cas cas) Nope
   in Reagent { withReact }
 (* Hmm but the actual cas will not be performed until the commit phase..    *)
 (* So a reaction with two cas on the same value will always fail.           *)
 (* Yep! But this is not what reagents are for: composing actions atomically *)
+(* TODO: document that it will block indefinetly if the cas is already part *)
+(* of the reaction. This is to be used with attemps/choose.                 *)
 
 let post_commit (f:'a -> unit) : ('a, 'a) t =
   let withReact rx next =
@@ -197,8 +201,7 @@ let send f =
   in Reagent { withReact }
 
 (* TODO: document that it will block indefinetly if the offer of *)
-(* the message is already is part of the reaction.               *)
-(* This is to be used with attemps/choose.                       *)
+(* the message is already is part of the reaction cf cas.        *)
 let answer (M m) =
   let merge =
     let withReact rx next =
