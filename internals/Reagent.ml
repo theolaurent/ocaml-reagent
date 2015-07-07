@@ -41,6 +41,8 @@ let run (r:('a, 'b) t) (arg:'a) : 'b =
   let rec retry_offer_loop offer =
     match (commit r).withReact (rx_return arg) Nope with
     | Imm x  -> ignore (Offer.try_resume offer x)
+    (* TODO: STOOOP! There is a problem here, a reaction can be *)
+    (* commited several time!!                                  *)
     | Block f -> f offer
     | Retry None
     | Retry (Some _) -> (* for space complexity reasons, the offer is *)
