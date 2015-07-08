@@ -32,7 +32,7 @@ let rec commit : type a b . (a, b) t -> (a, b) t_struct = fun r -> match r with
             in { withReact }
   | Reagent r -> r
 
-(*** Core combinators ***)
+(*** CORE COMBINATORS ***)
 
 (* TODO: think about what happen with (swap enpoint a) >> (swap enpoint b)  *)
 (* and the channel is empty: it will block ; should it atomically exchange? *)
@@ -157,7 +157,16 @@ let pair (r1:('a, 'b) t) (r2:('a, 'c) t) : ('a, ('b * 'c)) t =
   pipe (lift (fun a -> (a, a)))
        (pipe (first r1) (second r2))
 
-(*** Message passing ***)
+
+module Sugar = struct
+  let ( >*> ) = pair
+  let ( >+> ) = choose
+  let ( >>> ) = pipe
+end
+
+open Sugar
+
+(*** MESSAGE PASSING ***)
 
 type ('a, 'b, 'r) message_struct = { senderRx : 'a Reaction.t ;
                                      senderK  : ('b, 'r) t    ;
@@ -191,41 +200,37 @@ let answer (M m) =
                                 (* message passing).                             *)
                                 Nope
     in Reagent { withReact }
-  in pipe m.senderK merge
+  in m.senderK >>> merge
 
 
-(*** Running reagents ***)
+(*** RUNNING REAGENTS ***)
+
+(* This is an internal reagent intended for specific use. It pipe its argument *)
+(* r to aswering the offer. If the whole thing succeed, or if the offer has    *)
+(* been fulfilled by someone else, it returns unit. Otherwise, it returns      *)
+(* Retry, ignoring blocking from r.                                            *)
+let retry_with r offer =
+      attempt (r >>> answer (M { senderRx = rx_return () ;
+                                 senderK  = Nope         ;
+                                 offer    = offer        }))
+  >>> computed (function
+                 | None when Offer.is_waiting offer -> retry
+                 | _ -> constant ())
+
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
   let wait () = (* TODO: exponential wait *)
     perform Sched.Yield
   in
-  let rec retry_offer_loop offer =
-    match (commit r).withReact (rx_return arg) Nope with
-    | _ -> failwith "TODO"
-    (* | Imm x  -> ignore (Offer.try_resume offer x) *)
-    (* (\* TODO: STOOOP! There is a problem here, a reaction can be *\) *)
-    (* (\* commited several time!!                                  *\) *)
-    (* | Block f -> f offer *)
-    (* | Retry None *)
-    (* | Retry (Some _) -> (\* for space complexity reasons, the offer is *\) *)
-    (*                     (\* assumed to be already posted               *\) *)
-    (*                     ( wait () ; retry_offer_loop offer ) *)
-  in
-  let rec retry_loop () =
+  let rec retry_loop : 'c . ('a, 'c) t -> 'c = (fun r ->
     match (commit r).withReact (rx_return arg) Nope with
       | Imm x -> x
-      | Retry -> ( wait () ; retry_loop () )
+      | Retry -> ( wait () ; retry_loop r )
       | Block f -> Offer.suspend f
       | BlockOrRetry f ->
-         (* TODO: this is a hack, do things properly *)
+         (* TODO: this fork is a hack, is there a better way? *)
          (Offer.suspend
-            (fun o -> f o ; perform (Sched.Fork
-                                       (fun () -> retry_offer_loop o))))
-  in retry_loop ()
-
-module Sugar = struct
-  let ( >*> ) = pair
-  let ( >+> ) = choose
-  let ( >>> ) = pipe
-end
+            (fun o -> perform (Sched.Fork
+                                 (fun () -> retry_loop (retry_with r o))) ;
+                      f o))
+  )  in retry_loop r

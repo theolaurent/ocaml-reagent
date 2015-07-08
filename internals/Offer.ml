@@ -31,6 +31,10 @@ let refid o = CAS.id o.state
 let suspend f =
   perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
 
+(*
+
 let try_resume o a =
   if CAS.commit (complete_cas o a) then ( wake o () ; true )
   else false
+
+ *)

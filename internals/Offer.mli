@@ -11,4 +11,6 @@ val refid : 'a t -> CAS.refid
 
 val suspend : ('a t -> unit) -> 'a
 
+(*
 val try_resume : 'a t -> 'a -> bool
+ *)
