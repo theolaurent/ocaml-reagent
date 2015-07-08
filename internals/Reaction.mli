@@ -4,6 +4,8 @@ val cas : CAS.t -> unit t
 
 val pc : (unit -> unit) -> unit t
 
+val count_cas : 'a t -> int
+
 val has_cas : 'a t -> CAS.t -> bool
 
 val try_commit : 'a t -> bool

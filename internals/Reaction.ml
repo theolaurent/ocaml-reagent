@@ -9,6 +9,8 @@ type 'a t = {
 let cas c = { cas_list = [ c ] ; pc_list  = [] ; result = () }
 let pc  f = { pc_list  = [ f ] ; cas_list = [] ; result = () }
 
+let count_cas r = List.length r.cas_list
+
 let has_cas rx (CAS.CAS (r, _)) =
   let id = CAS.id r in
   List.exists (fun (CAS.CAS (r, _)) -> CAS.id r = id) rx.cas_list
@@ -39,6 +41,7 @@ let bind r1 f =
     result   = r2.result                 }
 
 let map f r = bind r (fun x -> return (f x))
+
 
 module Sugar = struct
   let rx_return = return
