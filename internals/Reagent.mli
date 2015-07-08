@@ -3,6 +3,8 @@ type ('a, 'b) t
 
 val run : ('a, 'b) t -> 'a -> 'b
 
+val dissolve : (unit, unit) t -> unit
+
 val pipe : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
 
 val choose : ('a, 'b) t -> ('a, 'b) t -> ('a, 'b) t
