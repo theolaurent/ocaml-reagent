@@ -139,15 +139,14 @@ let lift_partial (f:'a -> 'b option) : ('a, 'b) t =
 
 let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
   let apply rx next =
-    let cas = (r <:= updt) in
     if always_commit next && Reaction.count_cas rx = 0 then
       (* it is safe not to add the cas to the reaction *)
       (* because we know no cas is going to conflict   *)
-      if CAS.commit cas then (try_react next).apply rx Nope
+      if CAS.commit (r <:= updt) then (try_react next).apply rx Nope
       else Retry
     else
-      if Reaction.has_cas rx cas then Block (fun _ -> ())
-      else (try_react next).apply (rx >> Reaction.cas cas) Nope
+      if Reaction.has_cas_on rx r then Block (fun _ -> ())
+      else (try_react next).apply (rx >> Reaction.cas (r <:= updt)) Nope
   in Reagent ({ apply }, { alwaysCommit = false })
 (* Hmm but the actual cas will not be performed until the commit phase..    *)
 (* So a reaction with two cas on the same value will always fail.           *)
@@ -211,11 +210,10 @@ let send f =
 let answer (M m) =
   let merge =
     let apply rx next =
-      let cas = Offer.complete_cas m.offer (rx_value rx) in
-      if Reaction.has_cas rx cas then Block (fun _ -> ())
+      if Offer.rx_has rx m.offer then Block (fun _ -> ())
       else
-        (try_react next).apply ( rx >> Reaction.cas cas >> Reaction.pc (Offer.wake m.offer)
-                                     >> m.senderRx )
+        (try_react next).apply ( rx >> Offer.rx_complete m.offer (rx_value rx)
+                                    >> m.senderRx )
                                 (* The other reagent is given Reaction.inert,    *)
                                 (* it is this one's role to enforce the whole    *)
                                 (* reaction (i.e. both reactions and the         *)
@@ -256,3 +254,10 @@ let run (r:('a, 'b) t) (arg:'a) : 'b =
                                  (fun () -> retry_loop (retry_with r o))) ;
                       f o))
   )  in retry_loop r
+
+let dissolve (r:(unit, unit) t) : unit =
+  match (try_react (r >>> never)).apply (rx_return ()) Nope with
+  | Imm _ | Retry | BlockOrRetry _ ->
+     raise (Invalid_argument "Reagent.dissolve: \
+       only blocking reagent are supposed to be called with dissolve")
+  | Block f -> f Offer.catalist
