@@ -2,43 +2,41 @@
 open CAS.Sugar
 open Reagent.Sugar
 
-type 'a node = N of ('a * 'a node) option casref
+type 'a node =
+  | Nil
+  | Next of 'a * 'a node casref
 
-type 'a t = { head : 'a node ; tail : 'a node }
-(* invariant : head = None <=> tail = None          *)
-(* invariant : tail = Some (x, node) => node = None *)
+type 'a t = { head : 'a node casref ; tail : 'a node casref }
+(* invariant : head = Nil <=> tail = Nil           *)
+(* invariant : tail = Next (x, node) => node = Nil *)
 
-let create () = { head = N (ref None) ; tail = N (ref None) }
+let create () = { head = ref Nil ; tail = ref Nil }
 
 let push q =
   Reagent.computed (fun v ->
-    let newnode = Some (v, N (ref None)) in
-    let N head = q.head in
-    let N tail = q.tail in
-    let s = !(tail) in
+    let newnode = Next (v, ref Nil) in
+    let s = !(q.tail) in
     match s with
-    | None             -> Reagent.cas head (None --> newnode)
-                      >>> Reagent.cas tail (None --> newnode)
-    | Some (_, N node) -> assert (!node = None) ;
-                          Reagent.cas tail (s    --> newnode)
-                      >>> Reagent.cas node (None --> newnode)
+    | Nil            -> Reagent.cas q.head (Nil --> newnode)
+                    >>> Reagent.cas q.tail (Nil --> newnode)
+    | Next (_, node) -> assert (!node = Nil) ;
+                        Reagent.cas q.tail (s   --> newnode)
+                    >>> Reagent.cas node   (Nil --> newnode)
   )
 
 (* TODO: I feel this pop reagent could be written in a more elegant way *)
 let pop q =
   Reagent.computed (fun () ->
-    let N head = q.head in
-    let N tail = q.tail in
-    let s = !(head) in
+    let s = !(q.head) in
     match s with
-    | None -> Reagent.retry (* non blocking queue *)
-    | Some (v, N node) ->
+    | Nil -> Reagent.retry (* non blocking queue *)
+    | Next (v, node) ->
        let s' = !node in
        begin match s' with
-             | None   -> Reagent.cas head (s --> None)
-                     >>> Reagent.cas tail (s --> None)
+             | Nil    -> Reagent.cas q.head (s --> Nil)
+                     >>> Reagent.cas q.tail (s --> Nil)
                      >>> Reagent.constant v
-             | Some _ -> Reagent.cas head (s --> s'  )
+             | Next _ -> Reagent.cas q.head (s --> s'  )
                      >>> Reagent.constant v
        end
   )
@@ -53,6 +51,8 @@ let rec pop_until q f =
 
 type 'a cursor = 'a node
 
-let snapshot q = q.head
+let snapshot q = !(q.head)
 
-let next (N c) = !c
+let next c = match c with
+  | Nil -> None
+  | Next (a, n) -> Some (a, !n)
