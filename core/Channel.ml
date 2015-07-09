@@ -3,7 +3,6 @@ open Reagent.Sugar
 
 (* TODO: what is the expected behaviour when posting on both *)
 (* sides of a channel?                                       *)
-(* TODO: has_offer *)
 
 type ('a, 'b) endpoint = { outgoing : ('a, 'b) Reagent.message MSQueue.t ;
                            incoming : ('b, 'a) Reagent.message MSQueue.t }
