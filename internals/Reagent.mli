@@ -23,7 +23,9 @@ val attempt : ('a, 'b) t -> ('a, 'b option) t
 
 val computed : ('a -> (unit, 'b) t) -> ('a, 'b) t
 
-val cas : 'a CAS.Sugar.casref -> 'a CAS.Sugar.casupdt -> (unit, unit) t
+val cas : 'a CAS.ref -> 'a CAS.updt -> (unit, unit) t
+
+val update : 'a CAS.ref -> (('a * 'b) -> ('a * 'c)) -> ('b, 'c) t
 
 val post_commit : ('a -> unit) -> ('a, 'a) t
 

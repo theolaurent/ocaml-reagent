@@ -155,6 +155,11 @@ let cas (r:'a casref) (updt:'a casupdt) : (unit, unit) t =
 (* TODO: document that it will block indefinetly if the cas is already part *)
 (* of the reaction. This is to be used with attemps/choose.                 *)
 
+let update (r:'a casref) (f:('a * 'b) -> ('a * 'c)) : ('b, 'c) t =
+  computed (fun b -> let a = !r in
+                     let (a', c) = f (a, b) in
+                     pipe (cas r (a --> a')) (constant c))
+
 let post_commit (f:'a -> unit) : ('a, 'a) t =
   let apply rx next =
     let pc = (fun () -> f (rx_value rx)) in
