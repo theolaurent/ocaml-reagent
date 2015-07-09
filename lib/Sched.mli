@@ -1,24 +1,15 @@
 type 'a cont
-(** Represents a blocked computation that waits for a value of type 'a. *)
 
-type _ eff += Suspend : ('a cont -> unit) -> 'a eff
-(** [Perform @@ Suspend f] applies [f] to the current continuation, and suspends the
-    execution of the current thread, and switches to the next thread in the
-    scheduler's queue. *)
+val suspend : ('a cont -> unit) -> 'a
 
-type _ eff += Resume : 'a cont * 'a -> unit eff
-(** [perform @@ Resume (k,v)] prepares the suspended continuation [k] with value [v] and
-    enqueues it to the scheduler queue. *)
+val resume : 'a cont -> 'a -> unit
 
-type _ eff += Fork : (unit -> unit) -> unit eff
-(** [perform @@ Fork f] forks [f] as a new thread to which control immediately switches to. *)
+val fork : (unit -> unit) -> unit
 
-type _ eff += Yield : unit eff
-(** [perform Yield] suspends the current thread and switches to the next thread from
-    the run queue. *)
+val yield : unit -> unit
 
-type _ eff += Get_Tid : int eff
-(** [perform Get_Tid] returns the current thread identifier. *)
+val get_tid : unit -> int
+
+
 
 val run : (unit -> unit) -> unit
-(** [run f] runs [f] with the cooperative-threaded scheduler. *)

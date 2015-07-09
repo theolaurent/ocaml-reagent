@@ -1,62 +1,58 @@
-open Printf
 
-type thread_id = int
-type 'a cont = Cont : ('a,unit) continuation * thread_id -> 'a cont
+(* really simple interface for now *)
 
-type _ eff +=
-  | Fork    : (unit -> unit) -> unit eff
-  | Yield   : unit eff
-  | Suspend : ('a cont -> unit) -> 'a eff
-  | Resume  : 'a cont * 'a -> unit eff
-  | Get_Tid : int eff
+type 'a cont = C of ('a, unit) continuation * int
 
-let fork f = perform (Fork f)
-let yield () = perform Yield
+effect Fork : (unit -> unit) -> unit
+effect Yield : unit
+effect Suspend : ('a cont -> unit) -> 'a
+effect Resume : ('a cont * 'a) -> unit
+effect GetTid : int
 
-let run main =
-  (* Thread ID *)
-  let cur_tid = ref (-1) in
-  let next_tid = ref 0 in
-  (* Run queue handling *)
-  let run_q = Queue.create () in
-  let enqueue t v tid =
-    Queue.push (fun () -> (cur_tid := tid; continue t v)) run_q
-  in
-  let rec dequeue () =
-    if Queue.is_empty run_q then ()
-    else Queue.pop run_q ()
-  in
-  let rec spawn : type a . (a -> unit) -> a -> unit =
-    fun f x ->
-      cur_tid := !next_tid;
-      next_tid := !next_tid + 1;
-      Effects.handle scheduler f x
-    and scheduler =
-      {return = dequeue;
-      exn = raise;
-      eff = fun (type a) (eff : a eff) (k : (a, unit) continuation) ->
-        match eff with
-        | Yield ->
-            enqueue k () !cur_tid;
-            dequeue ()
-        | Fork f ->
-            enqueue k () !cur_tid;
-            spawn f ()
-        | Suspend f ->
-            (* f (Cont (k,!cur_tid)); *)
-            (* dequeue () *)
-            (* hack to get effects handled *)
-            Effects.handle scheduler f (Cont (k,!cur_tid));
-            dequeue ()
-        | Resume(Cont (k',tid), v) ->
-            enqueue k' v tid;
-            continue k ()
-        | Get_Tid -> continue k !cur_tid
-        | _ -> delegate eff k}
-  in
-  spawn main ()
+let fork f =
+  Printf.printf "performing Fork\n" ;
+  perform (Fork f)
+let yield () =
+  Printf.printf "performing Yield\n" ;
+  perform Yield
+let suspend f =
+  Printf.printf "performing Suspend\n" ;
+  perform (Suspend f)
+let resume t v =
+  Printf.printf "performing Resume\n" ;
+  perform (Resume (t, v))
+let get_tid () =
+  Printf.printf "performing GetTid\n" ;
+  perform GetTid
 
+open CAS.Sugar
 
-let suspend f = perform (Suspend f)
-let resume (k,v) = perform (Resume (k,v))
-let get_tid () = perform Get_Tid
+let nb_domain = 8
+
+(* really naive : one shared queue *)
+let queue = HW_MSQueue.create ()
+
+let fresh_tid () = Oo.id (object end)
+
+let enqueue c = HW_MSQueue.push c queue
+
+let rec dequeue () =
+  let C (k, i) = HW_MSQueue.pop queue in
+  spawn (fun () -> continue k ()) i
+
+and spawn f tid = match f () with
+    | () -> dequeue ()
+    | effect (Fork f) k -> enqueue (C (k, tid)) ;
+                           spawn f (fresh_tid ())
+    | effect Yield k -> enqueue (C (k, tid)) ;
+                        dequeue ()
+    | effect (Suspend f) k -> spawn (fun () -> f (C (k, tid))) tid
+    | effect (Resume ((C (t, nid)), v)) k -> enqueue (C (k, tid)) ;
+                                            spawn (fun () -> continue t v) nid
+    | effect GetTid k -> spawn (fun () -> continue k tid) tid
+
+let run f =
+  for i = 1 to nb_domain - 1  do
+    Domain.spawn (fun () -> dequeue ())
+  done ;
+  spawn f (fresh_tid ())

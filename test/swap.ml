@@ -1,39 +1,37 @@
 open Printf
 open Reagent.Sugar
 
-let get_tid () = perform Sched.Get_Tid
-let fork f = perform @@ Sched.Fork f
-let yield () = perform Sched.Yield
+let id_str () = sprintf "%d:%d" (Domain.self ()) (Sched.get_tid ())
 
 let main () =
-  printf "[%d] starting main\n" (get_tid ());
+  printf "[%s] starting main\n" (id_str ());
 
   (* Test 1 *)
   printf "**** Test 1 ****\n%!";
   let (ep1,ep2) = Channel.create () in
-  fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
-  fork (fun () -> printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 1);
-  printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 2;
+  Sched.fork (fun () ->
+    printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
+  Sched.fork (fun () -> printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep2) 1);
+  printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep2) 2;
 
   (* Test 2 *)
-  yield ();
+  Sched.yield ();
   Unix.sleep (1);
   printf "**** Test 2 ****\n%!";
   let (ep1,ep2) = Channel.create () in
-  fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >+> Channel.swap ep2) 0);
-  printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2) 1;
+  Sched.fork (fun () ->
+    printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep1 >+> Channel.swap ep2) 0);
+  printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep2) 1;
 
   (* Test 3 *)
-  yield ();
+  Sched.yield ();
   Unix.sleep (1);
   printf "**** Test 3 ****\n%!";
   let (ep1,ep2) = Channel.create () in
-  fork (fun () ->
-    printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
+  Sched.fork (fun () ->
+    printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep1 >>> Channel.swap ep1) 0);
   printf "will fail! Reagents are not as powerful as communicating transactions!\n";
-  printf "[%d] %d\n%!" (get_tid ()) @@ Reagent.run (Channel.swap ep2 >>> Channel.swap ep2) 1;
+  printf "[%s] %d\n%!" (id_str ()) @@ Reagent.run (Channel.swap ep2 >>> Channel.swap ep2) 1;
   printf "should not see this!\n";
   ()
 

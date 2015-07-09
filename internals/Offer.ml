@@ -20,7 +20,7 @@ let wake o () =
   let s = !(o.state) in
   match s with
   | Completed v when (o.state <!= s --> WakedUp)
-      -> ( perform ( Sched.Resume (o.thread, v)) )
+      -> Sched.resume o.thread v
   | _ -> failwith "Offer.wake: \
                    trying to wake a non-completed or already waken offer"
 
@@ -29,7 +29,7 @@ let complete_cas o a = (o.state <:= Waiting --> Completed a)
 let refid o = CAS.id o.state
 
 let suspend f =
-  perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
+  Sched.suspend (fun k -> f { state = ref Waiting ; thread = k })
 
 (*
 
