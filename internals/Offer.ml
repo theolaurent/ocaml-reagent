@@ -1,35 +1,67 @@
 
 open CAS.Sugar
+open Reaction.Sugar
 
+(* TODO: GADT to ensure that dummy is a unit status? *)
 type 'a status =
   | Waiting
   | Completed of 'a
-  | WakedUp
+  | WakenUp
+  | Dummy
 
 (* The thread is suposed to be resumed only once, and when    *)
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
-type 'a t = { state  : 'a status casref ;
-              thread : 'a Sched.cont    }
+type 'a t = { state  : 'a status casref     ;
+              thread : 'a Sched.cont option }
+
+
+(* TODO : removable catalysits *)
+let catalist = { state = ref Dummy ; thread = None }
 
 let is_waiting o = match !(o.state) with
-  | Waiting -> true
-  | _       -> false
+  | Waiting | Dummy -> true
+  | _               -> false
 
-let wake o () =
+let rx_complete o a =
+  let wake x () =
+    let s = !(x.state) in
+    match s with
+    | Completed v when (x.state <!= s --> WakenUp)
+            -> begin match x.thread with
+                     | None -> ()
+                     | Some t -> Sched.resume t v
+               end
+    | _     -> raise (Invalid_argument "Offer.rx_complete: \
+                 trying to wake a non-completed or already waken offer")
+  in match !(o.state) with
+  | Dummy -> rx_return ()
+  | _ -> Reaction.cas (o.state <:= Waiting --> Completed a)
+      >> Reaction.pc (wake o)
+
+let rx_has rx o = Reaction.has_cas_on rx o.state
+
+let try_get_result o =
+  let () = if not (o.thread == None) then
+    raise (Invalid_argument "Offer.try_get_result: \
+      trying to get the result of a blocking offer")
+  in
   let s = !(o.state) in
   match s with
-  | Completed v when (o.state <!= s --> WakedUp)
-      -> ( perform ( Sched.Resume (o.thread, v)) )
-  | _ -> failwith "Offer.wake: \
-                   trying to wake a non-completed or already waken offer"
+  | Completed v when (o.state <!= s --> WakenUp)
+            -> Some v
+  | Waiting -> None
+  | _       -> raise (Invalid_argument "Offer.try_get_result: \
+                 trying to get the result of an already waken offer")
 
-let complete_cas o a = (o.state <:= Waiting --> Completed a)
+let post_and_suspend f =
+  Sched.suspend (fun k -> f { state = ref Waiting ; thread = Some k })
 
-let refid o = CAS.id o.state
+let post_and_return f =
+   let o = { state = ref Waiting ; thread = None } in
+   let () = Sched.fork (fun () -> f o) in
+   o
 
-let suspend f =
-  perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
 
 (*
 

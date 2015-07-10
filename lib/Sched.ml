@@ -8,10 +8,13 @@ type _ eff +=
   | Yield   : unit eff
   | Suspend : ('a cont -> unit) -> 'a eff
   | Resume  : 'a cont * 'a -> unit eff
-  | Get_Tid : int eff
+  | GetTid : int eff
 
 let fork f = perform (Fork f)
 let yield () = perform Yield
+let suspend f = perform (Suspend f)
+let resume k v = perform (Resume (k,v))
+let get_tid () = perform GetTid
 
 let run main =
   (* Thread ID *)
@@ -51,12 +54,7 @@ let run main =
         | Resume(Cont (k',tid), v) ->
             enqueue k' v tid;
             continue k ()
-        | Get_Tid -> continue k !cur_tid
+        | GetTid -> continue k !cur_tid
         | _ -> delegate eff k}
   in
   spawn main ()
-
-
-let suspend f = perform (Suspend f)
-let resume (k,v) = perform (Resume (k,v))
-let get_tid () = perform Get_Tid
