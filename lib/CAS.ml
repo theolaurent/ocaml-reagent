@@ -8,13 +8,20 @@ type 'a state =
   | OnGoingKCAS of 'a
 
 type 'a ref = { mutable content : 'a state ;
+                        mutex   : Mutex.t  ;
                         id      : int      }
 
 let compare_and_swap r x y =
-  Obj.compare_and_swap_field (Obj.repr r) 0 (Obj.repr x) (Obj.repr y)
-                             (* 0 stands for the first field *)
+  (* no hardware CAS? *)
+  Mutex.lock r.mutex ;
+  let res = if r.content == x then
+              ( r.content <- y ; true )
+            else false in
+  Mutex.unlock r.mutex ;
+  res
 
 let ref x = { content = Normal x           ;
+              mutex   = Mutex.create ()    ;
               id      = Oo.id (object end) }
             (* I've been told this is supposed *)
             (* to be a thread-safe unique id   *)
