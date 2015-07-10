@@ -243,8 +243,10 @@ let retry_with r offer =
                 | Some x -> constant x)
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
-  let wait () = (* TODO: exponential wait *)
-    Sched.yield ()
+  let b = Backoff.create () in
+  let wait () =
+    (* Sched.yield () *)
+    Backoff.once b
   in
   let rec retry_loop : 'c . ('a, 'c) t -> 'c = (fun r ->
     match (try_react r).apply (rx_return arg) Nope with
