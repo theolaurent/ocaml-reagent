@@ -18,7 +18,7 @@ let enqueue_work i =
   done
 
 let sum_work i =
-  let rec loop sum = match Reagent.run (Reagent.attempt (MSQueue.pop q)) () with
+  let rec loop sum = match Reagent.run (MSQueue.pop q) () with
     | None -> sum
     | Some x ->
        (* Printf.printf "Worker [%d]: Dequeuing %d\n%!" i x ; *)

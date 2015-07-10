@@ -22,13 +22,10 @@ let pop q =
       | Nil -> failwith "MSQueue.pop: broken invariant"
       | Next (_, x) -> !x
     in match nhead with
-    | Nil -> Reagent.retry (* non blocking queue *)
+    | Nil -> Reagent.constant None
     | Next (v, _) -> Reagent.cas q.head (s --> nhead)
-                 >>> Reagent.constant v
+                 >>> Reagent.constant (Some v)
   )
-
-
-
 
 let push q =
   let rec find_tail_and_enq curr_end node =
@@ -48,13 +45,15 @@ let push q =
                        (fun () -> ignore (q.tail <!= !(q.tail) --> newnode))
   )
 
-
 let rec pop_until q f =
-  (  pop q >>> Reagent.computed (fun x ->
-                 if f x then Reagent.never
-                 else Reagent.post_commit (Reagent.run (pop_until q f))
-                 (* use post commit to pop 1-by-1, more efficient that kCAS *)
-               )
+  (  pop q >>>
+     Reagent.computed (fun x ->
+       match x with
+       | None -> Reagent.constant ()
+       | Some x ->
+           if f x then Reagent.never
+           else Reagent.post_commit (Reagent.run (pop_until q f))
+           (* use post commit to pop 1-by-1, more efficient that kCAS *))
   ) >+> Reagent.constant ()
 
 type 'a cursor = 'a node
