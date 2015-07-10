@@ -27,8 +27,14 @@ let fresh_tid () = Oo.id (object end)
 let enqueue c = HW_MSQueue.push c queue
 
 let rec dequeue () =
-  let C (k, i) = HW_MSQueue.pop queue in
-  spawn (fun () -> continue k ()) i
+  (* what to do when the queue is empty? *)
+  (* TODO: count idle domain etc...      *)
+  (* Right now just retrying.            *)
+  let b = Backoff.create () in
+  let rec loop () = match HW_MSQueue.pop queue with
+    | Some (C (k, i)) -> spawn (fun () -> continue k ()) i
+    | None -> ( Backoff.once b ; loop () )
+  in loop ()
 and spawn f tid = match f () with
     | () -> dequeue ()
     | effect (Fork f) k -> enqueue (C (k, tid)) ; spawn f (fresh_tid ())
