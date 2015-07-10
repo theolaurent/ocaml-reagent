@@ -1,29 +1,28 @@
-
 open CAS.Sugar
 open Reagent.Sugar
 
-(* Concurrent queue based on functionnal queue stored in a CAS reference. *)
-(* Not the most efficient concurrent queue, but has avantages, like       *)
-(* returning the whole content without copying it!                        *)
-(* This queue is non-blocking, it only fail trasiently.                   *)
-
+(* Concurrent queue based on functionnal queue stored in a CAS reference.
+ * Not the most efficient concurrent queue, but has avantages, like returning
+ * the whole content without copying it! This queue is non-blocking, it only
+ * fail trasiently.
+ *)
 
 type 'a t = 'a FQueue.t casref
-
 
 let create () = ref FQueue.empty
 
 let push q =
-  Reagent.computed (fun v -> let s = !q in
-                             Reagent.cas q (s --> FQueue.push v s))
+  Reagent.computed (fun v ->
+    let s = !q in Reagent.cas q (s --> FQueue.push v s))
 
 let pop q =
-  Reagent.computed (fun () -> try
-                                let s = !q in
-                                let (v, n) = FQueue.pop s in
-                                    Reagent.cas q (s --> n)
-                                >>> Reagent.constant v
-                              with FQueue.Empty -> Reagent.retry)
+  Reagent.computed (fun () ->
+    try
+      let s = !q in
+      let (v, n) = FQueue.pop s in
+      Reagent.cas q (s --> n) >>>
+      Reagent.constant (Some v)
+    with FQueue.Empty -> Reagent.constant None)
 
 let pop_until q f =
   let rec loop fq =
@@ -33,9 +32,8 @@ let pop_until q f =
       else fq
     with FQueue.Empty -> fq
   in
-  Reagent.computed (fun () -> let s = !q in
-                              Reagent.cas q (s --> loop s))
-
+  Reagent.computed (fun () ->
+    let s = !q in Reagent.cas q (s --> loop s))
 
 type 'a cursor = 'a FQueue.t
 

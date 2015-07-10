@@ -8,7 +8,7 @@ let nb_workers = 2
 
 let (post, get) = Channel.create ()
 
-let step = 10
+let step = 1000
 
 let enqueue_work i =
   for j = (i + 1) * step to (i + 2) * step - 1 do
@@ -18,7 +18,7 @@ let enqueue_work i =
   done
 
 let sum_work i =
-  let rec loop sum = match Reagent.run (Reagent.attempt (MSQueue.pop q)) () with
+  let rec loop sum = match Reagent.run (MSQueue.pop q) () with
     | None -> sum
     | Some x ->
        Printf.printf "Domain [%d], Worker [%d]: Dequeuing %d\n%!" x ;
