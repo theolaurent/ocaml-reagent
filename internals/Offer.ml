@@ -2,52 +2,65 @@
 open CAS.Sugar
 open Reaction.Sugar
 
+(* TODO: GADT to ensure that dummy is a unit status? *)
 type 'a status =
   | Waiting
   | Completed of 'a
-  | WakedUp
+  | WakenUp
+  | Dummy
 
 (* The thread is suposed to be resumed only once, and when    *)
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
-type 'a t_struct = { state  : 'a status casref ;
-                     thread : 'a Sched.cont    }
+type 'a t = { state  : 'a status casref     ;
+              thread : 'a Sched.cont option }
 
-type _ t =
-  | Dummy  : unit t (* for catalysis *)
-  | Actual : 'a t_struct -> 'a t
 
 (* TODO : removable catalysits *)
-let catalist = Dummy
+let catalist = { state = ref Dummy ; thread = None }
 
-let is_waiting (type a) (o:a t) : bool = match o with
-  | Dummy -> true
-  | Actual o -> begin match !(o.state) with
-                      | Waiting -> true
-                      | _       -> false
-                end
-let rx_complete (type a) (o:a t) (a:a) : unit Reaction.t =
+let is_waiting o = match !(o.state) with
+  | Waiting | Dummy -> true
+  | _               -> false
+
+let rx_complete o a =
   let wake x () =
     let s = !(x.state) in
     match s with
-    | Completed v when (x.state <!= s --> WakedUp)
-        -> Sched.resume x.thread v
-    | _ -> raise (Invalid_argument "Offer.rx_complete: \
-             trying to wake a non-completed or already waken offer")
-  in
-  let complete_cas x a = (x.state <:= Waiting --> Completed a)
-  in match o with
+    | Completed v when (x.state <!= s --> WakenUp)
+            -> begin match x.thread with
+                     | None -> ()
+                     | Some t -> Sched.resume t v
+               end
+    | _     -> raise (Invalid_argument "Offer.rx_complete: \
+                 trying to wake a non-completed or already waken offer")
+  in match !(o.state) with
   | Dummy -> rx_return ()
-  | Actual x -> Reaction.cas (complete_cas x a) >> Reaction.pc (wake x)
+  | _ -> Reaction.cas (o.state <:= Waiting --> Completed a)
+      >> Reaction.pc (wake o)
 
-let rx_has (type a) rx (o:a t) : bool = match o with
-  | Dummy -> false
-  | Actual x -> Reaction.has_cas_on rx x.state
+let rx_has rx o = Reaction.has_cas_on rx o.state
 
-let suspend f =
-  Sched.suspend (fun k -> f (Actual { state = ref Waiting ; thread = k }))
+let try_get_result o =
+  let () = if not (o.thread == None) then
+    raise (Invalid_argument "Offer.try_get_result: \
+      trying to get the result of a blocking offer")
+  in
+  let s = !(o.state) in
+  match s with
+  | Completed v when (o.state <!= s --> WakenUp)
+            -> Some v
+  | Waiting -> None
+  | _       -> raise (Invalid_argument "Offer.try_get_result: \
+                 trying to get the result of an already waken offer")
 
+let post_and_suspend f =
+  Sched.suspend (fun k -> f { state = ref Waiting ; thread = Some k })
 
+let post_and_return f =
+   let o = { state = ref Waiting ; thread = None } in
+   let () = Sched.fork (fun () -> f o) in
+   o
 
 
 (*

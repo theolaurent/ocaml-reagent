@@ -238,26 +238,22 @@ let retry_with r offer =
       attempt (r >>> answer (M { senderRx = rx_return () ;
                                  senderK  = Nope         ;
                                  offer    = offer        }))
-  >>> computed (function
-                 | None when Offer.is_waiting offer -> retry
-                 | _ -> constant ())
-
+  >>> computed (fun _ -> match Offer.try_get_result offer with
+                | None -> retry
+                | Some x -> constant x)
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
   let wait () = (* TODO: exponential wait *)
-    Sched.yield
+    Sched.yield ()
   in
   let rec retry_loop : 'c . ('a, 'c) t -> 'c = (fun r ->
     match (try_react r).apply (rx_return arg) Nope with
       | Imm x -> x
       | Retry -> ( wait () ; retry_loop r )
-      | Block f -> Offer.suspend f
+      | Block f -> Offer.post_and_suspend f
       | BlockOrRetry f ->
-         (* TODO: this fork is a hack, is there a better way? *)
-         (Offer.suspend
-            (fun o -> Sched.fork
-                                 (fun () -> retry_loop (retry_with r o)) ;
-                      f o))
+         let o = Offer.post_and_return f in
+         retry_loop (retry_with r o)
   )  in retry_loop r
 
 let dissolve (r:(unit, unit) t) : unit =
