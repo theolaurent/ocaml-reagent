@@ -1,9 +1,7 @@
 open Printf
 open Reagent.Sugar
+open Sched
 
-let get_tid () = perform Sched.Get_Tid
-let fork f = perform @@ Sched.Fork f
-let yield () = perform Sched.Yield
 
 let main () =
   printf "[%d] starting main\n" (get_tid ());

@@ -31,7 +31,7 @@ let rx_complete (type a) (o:a t) (a:a) : unit Reaction.t =
     let s = !(x.state) in
     match s with
     | Completed v when (x.state <!= s --> WakedUp)
-        -> ( perform ( Sched.Resume (x.thread, v)) )
+        -> Sched.resume x.thread v
     | _ -> raise (Invalid_argument "Offer.rx_complete: \
              trying to wake a non-completed or already waken offer")
   in
@@ -45,7 +45,7 @@ let rx_has (type a) rx (o:a t) : bool = match o with
   | Actual x -> Reaction.has_cas_on rx x.state
 
 let suspend f =
-  perform (Sched.Suspend (fun k -> f (Actual { state = ref Waiting ; thread = k })))
+  Sched.suspend (fun k -> f (Actual { state = ref Waiting ; thread = k }))
 
 
 

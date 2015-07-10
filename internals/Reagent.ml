@@ -245,7 +245,7 @@ let retry_with r offer =
 
 let run (r:('a, 'b) t) (arg:'a) : 'b =
   let wait () = (* TODO: exponential wait *)
-    perform Sched.Yield
+    Sched.yield
   in
   let rec retry_loop : 'c . ('a, 'c) t -> 'c = (fun r ->
     match (try_react r).apply (rx_return arg) Nope with
@@ -255,8 +255,8 @@ let run (r:('a, 'b) t) (arg:'a) : 'b =
       | BlockOrRetry f ->
          (* TODO: this fork is a hack, is there a better way? *)
          (Offer.suspend
-            (fun o -> perform (Sched.Fork
-                                 (fun () -> retry_loop (retry_with r o))) ;
+            (fun o -> Sched.fork
+                                 (fun () -> retry_loop (retry_with r o)) ;
                       f o))
   )  in retry_loop r
 
