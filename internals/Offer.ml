@@ -1,5 +1,6 @@
 
 open CAS.Sugar
+open Reaction.Sugar
 
 type 'a status =
   | Waiting
@@ -9,27 +10,45 @@ type 'a status =
 (* The thread is suposed to be resumed only once, and when    *)
 (* the message has been completed.                            *)
 (* Also, all completed offers should be waken at some point.  *)
-type 'a t = { state  : 'a status casref ;
-              thread : 'a Sched.cont    }
+type 'a t_struct = { state  : 'a status casref ;
+                     thread : 'a Sched.cont    }
 
-let is_waiting o = match !(o.state) with
-  | Waiting -> true
-  | _       -> false
+type _ t =
+  | Dummy  : unit t (* for catalysis *)
+  | Actual : 'a t_struct -> 'a t
 
-let wake o () =
-  let s = !(o.state) in
-  match s with
-  | Completed v when (o.state <!= s --> WakedUp)
-      -> ( perform ( Sched.Resume (o.thread, v)) )
-  | _ -> failwith "Offer.wake: \
-                   trying to wake a non-completed or already waken offer"
+(* TODO : removable catalysits *)
+let catalist = Dummy
 
-let complete_cas o a = (o.state <:= Waiting --> Completed a)
+let is_waiting (type a) (o:a t) : bool = match o with
+  | Dummy -> true
+  | Actual o -> begin match !(o.state) with
+                      | Waiting -> true
+                      | _       -> false
+                end
+let rx_complete (type a) (o:a t) (a:a) : unit Reaction.t =
+  let wake x () =
+    let s = !(x.state) in
+    match s with
+    | Completed v when (x.state <!= s --> WakedUp)
+        -> ( perform ( Sched.Resume (x.thread, v)) )
+    | _ -> raise (Invalid_argument "Offer.rx_complete: \
+             trying to wake a non-completed or already waken offer")
+  in
+  let complete_cas x a = (x.state <:= Waiting --> Completed a)
+  in match o with
+  | Dummy -> rx_return ()
+  | Actual x -> Reaction.cas (complete_cas x a) >> Reaction.pc (wake x)
 
-let refid o = CAS.id o.state
+let rx_has (type a) rx (o:a t) : bool = match o with
+  | Dummy -> false
+  | Actual x -> Reaction.has_cas_on rx x.state
 
 let suspend f =
-  perform (Sched.Suspend (fun k -> f { state = ref Waiting ; thread = k }))
+  perform (Sched.Suspend (fun k -> f (Actual { state = ref Waiting ; thread = k })))
+
+
+
 
 (*
 
