@@ -20,7 +20,7 @@ let pop q =
   let rec loop () =
     let s = !(q.head) in
     let nhead = match s with
-      | Nil -> failwith "MSQueue.pop: broken invariant"
+      | Nil -> failwith "HW_MSQueue.pop: broken invariant"
       | Next (_, x) -> !x
     in match nhead with
      | Next  (v, _) when (q.head <!= s --> nhead) -> v
@@ -31,12 +31,12 @@ let push v q =
   let rec find_tail_and_enq curr_end node =
     if curr_end <!= (Nil --> node) then ()
     else match !curr_end with
-          | Nil -> failwith "MSQueue.push: broken invariant."
+          | Nil -> failwith "HW_MSQueue.push: broken invariant."
           | Next (_, n) -> find_tail_and_enq n node
   in
   let newnode = Next (v, ref Nil) in
   match !(q.tail) with
-  | Nil         -> failwith "MSQueue.push: broken invariant."
+  | Nil         -> failwith "HW_MSQueue.push: broken invariant."
   | Next (_, n) -> find_tail_and_enq n newnode ;
                    (* try to update tail, but ignore when fail *)
                    ignore (q.tail <!= !(q.tail) --> newnode)

@@ -17,8 +17,9 @@ let create () =
 
 
 let swap e =
-  let () = Reagent.run (MSQueue.pop_until e.incoming
-                                                  Reagent.is_message_available) () in
+  let () = Reagent.run
+             (MSQueue.pop_until e.incoming
+                                Reagent.is_message_available) () in
   let rec all_messages c =
     match MSQueue.next c with
     | None -> Reagent.never

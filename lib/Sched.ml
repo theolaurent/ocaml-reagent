@@ -10,19 +10,14 @@ effect Resume : ('a cont * 'a) -> unit
 effect GetTid : int
 
 let fork f =
-  Printf.printf "performing Fork\n" ;
   perform (Fork f)
 let yield () =
-  Printf.printf "performing Yield\n" ;
   perform Yield
 let suspend f =
-  Printf.printf "performing Suspend\n" ;
   perform (Suspend f)
 let resume t v =
-  Printf.printf "performing Resume\n" ;
   perform (Resume (t, v))
 let get_tid () =
-  Printf.printf "performing GetTid\n" ;
   perform GetTid
 
 open CAS.Sugar
@@ -39,7 +34,6 @@ let enqueue c = HW_MSQueue.push c queue
 let rec dequeue () =
   let C (k, i) = HW_MSQueue.pop queue in
   spawn (fun () -> continue k ()) i
-
 and spawn f tid = match f () with
     | () -> dequeue ()
     | effect (Fork f) k -> enqueue (C (k, tid)) ;
@@ -52,7 +46,9 @@ and spawn f tid = match f () with
     | effect GetTid k -> spawn (fun () -> continue k tid) tid
 
 let run f =
+  Printf.printf   "=== Start scheduling ===\n" ;
   for i = 1 to nb_domain - 1  do
+    Printf.printf "=    Spawn domain %d    =\n" i ;
     Domain.spawn (fun () -> dequeue ())
   done ;
   spawn f (fresh_tid ())
