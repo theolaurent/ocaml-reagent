@@ -9,20 +9,15 @@ effect Suspend : ('a cont -> unit) -> 'a
 effect Resume : ('a cont * 'a) -> unit
 effect GetTid : int
 
-let fork f =
-  perform (Fork f)
-let yield () =
-  perform Yield
-let suspend f =
-  perform (Suspend f)
-let resume t v =
-  perform (Resume (t, v))
-let get_tid () =
-  perform GetTid
+let fork f = perform (Fork f)
+let yield () = perform Yield
+let suspend f = perform (Suspend f)
+let resume t v = perform (Resume (t, v))
+let get_tid () = perform GetTid
 
 open CAS.Sugar
 
-let nb_domain = 8
+let nb_domain = 2
 
 (* really naive : one shared queue *)
 let queue = HW_MSQueue.create ()
@@ -36,13 +31,11 @@ let rec dequeue () =
   spawn (fun () -> continue k ()) i
 and spawn f tid = match f () with
     | () -> dequeue ()
-    | effect (Fork f) k -> enqueue (C (k, tid)) ;
-                           spawn f (fresh_tid ())
-    | effect Yield k -> enqueue (C (k, tid)) ;
-                        dequeue ()
+    | effect (Fork f) k -> enqueue (C (k, tid)) ; spawn f (fresh_tid ())
+    | effect Yield k -> enqueue (C (k, tid)) ; dequeue ()
     | effect (Suspend f) k -> spawn (fun () -> f (C (k, tid))) tid
-    | effect (Resume ((C (t, nid)), v)) k -> enqueue (C (k, tid)) ;
-                                            spawn (fun () -> continue t v) nid
+    | effect (Resume ((C (t, nid)), v)) k ->
+        enqueue (C (k, tid)) ; spawn (fun () -> continue t v) nid
     | effect GetTid k -> spawn (fun () -> continue k tid) tid
 
 let run f =
