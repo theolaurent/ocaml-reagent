@@ -50,17 +50,19 @@ module Test (Q : QUEUE) = struct
 
   let run num_doms num_items =
     (* initialize work *)
-    for i = 1 to num_items do
-      Q.push q i
-    done;
+    let rec produce = function
+      | 0 -> printf "[%d] production complete\n%!" (Domain.self ())
+      | i -> Q.push q i; produce (i-1)
+    in
     let rec consume i =
       match Q.pop q with
       | None -> printf "[%d] consumed=%d\n%!" (Domain.self ()) i
       | Some _ -> consume (i+1)
     in
     for i = 1 to num_doms - 1 do
-      Domain.spawn (fun () -> consume 0)
+      Domain.spawn (fun () -> produce num_items; consume 0)
     done;
+    produce num_items;
     consume 0
 end
 
