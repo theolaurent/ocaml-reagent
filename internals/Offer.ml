@@ -62,7 +62,6 @@ let post_and_return f =
    let () = Sched.fork (fun () -> f o) in
    o
 
-
 (*
 
 let try_resume o a =

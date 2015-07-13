@@ -81,3 +81,18 @@ end = struct
   let (<!=) r u = commit (CAS (r, u))
   let (<:=) r u = CAS (r, u)
 end
+
+open Sugar
+
+let try_map f r =
+  let s = !r in (r <!= s --> f s)
+
+let map f r =
+  let b = Backoff.create () in
+  let rec loop () =
+    if try_map f r then ()
+    else ( Backoff.once b ; loop ())
+  in loop ()
+
+let incr r = map (fun x -> x + 1) r
+let decr r = map (fun x -> x - 1) r

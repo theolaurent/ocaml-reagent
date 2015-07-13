@@ -1,60 +1,62 @@
-open Printf
 
-type thread_id = int
-type 'a cont = Cont : ('a,unit) continuation * thread_id -> 'a cont
+(* really simple interface for now *)
 
-type _ eff +=
-  | Fork    : (unit -> unit) -> unit eff
-  | Yield   : unit eff
-  | Suspend : ('a cont -> unit) -> 'a eff
-  | Resume  : 'a cont * 'a -> unit eff
-  | GetTid : int eff
+type 'a cont = C of ('a, unit) continuation * int
+
+effect Fork : (unit -> unit) -> unit
+effect Yield : unit
+effect Suspend : ('a cont -> unit) -> 'a
+effect Resume : ('a cont * 'a) -> unit
+effect GetTid : int
 
 let fork f = perform (Fork f)
 let yield () = perform Yield
 let suspend f = perform (Suspend f)
-let resume k v = perform (Resume (k,v))
+let resume t v = perform (Resume (t, v))
 let get_tid () = perform GetTid
 
-let run main =
-  (* Thread ID *)
-  let cur_tid = ref (-1) in
-  let next_tid = ref 0 in
-  (* Run queue handling *)
-  let run_q = Queue.create () in
-  let enqueue t v tid =
-    Queue.push (fun () -> (cur_tid := tid; continue t v)) run_q
-  in
-  let rec dequeue () =
-    if Queue.is_empty run_q then ()
-    else Queue.pop run_q ()
-  in
-  let rec spawn : type a . (a -> unit) -> a -> unit =
-    fun f x ->
-      cur_tid := !next_tid;
-      next_tid := !next_tid + 1;
-      Effects.handle scheduler f x
-    and scheduler =
-      {return = dequeue;
-      exn = raise;
-      eff = fun (type a) (eff : a eff) (k : (a, unit) continuation) ->
-        match eff with
-        | Yield ->
-            enqueue k () !cur_tid;
-            dequeue ()
-        | Fork f ->
-            enqueue k () !cur_tid;
-            spawn f ()
-        | Suspend f ->
-            (* f (Cont (k,!cur_tid)); *)
-            (* dequeue () *)
-            (* hack to get effects handled *)
-            Effects.handle scheduler f (Cont (k,!cur_tid));
-            dequeue ()
-        | Resume(Cont (k',tid), v) ->
-            enqueue k' v tid;
-            continue k ()
-        | GetTid -> continue k !cur_tid
-        | _ -> delegate eff k}
-  in
-  spawn main ()
+open CAS.Sugar
+
+let nb_domain = 2
+
+let nb_idle = ref 0
+
+(* really naive : one shared queue *)
+let queue = HW_MSQueue.create ()
+
+let fresh_tid () = Oo.id (object end)
+
+let enqueue c = HW_MSQueue.push c queue
+
+let rec dequeue is_idle =
+  (* what to do when the queue is empty? *)
+  (* TODO: count idle domain etc...      *)
+  (* Right now just retrying.            *)
+  let b = Backoff.create () in
+  let rec loop () = match HW_MSQueue.pop queue with
+    | Some (C (k, i)) -> let () = if is_idle then ( CAS.decr nb_idle ;
+                                                    Printf.printf   "= Domain %d just waked  =\n%!" (Domain.self ()) )
+in
+                         spawn (fun () -> continue k ()) i
+    | None -> if !nb_idle = nb_domain then ()
+              else if not is_idle then ( CAS.incr nb_idle ;
+                                    Printf.printf   "= Domain %d is now idle =\n%!" (Domain.self ()) ;
+                                    dequeue true )
+              else ( Backoff.once b ; loop () )
+  in loop ()
+and spawn f tid = match f () with
+    | () -> dequeue false
+    | effect (Fork f) k -> enqueue (C (k, tid)) ; spawn f (fresh_tid ())
+    | effect Yield k -> enqueue (C (k, tid)) ; dequeue false
+    | effect (Suspend f) k -> spawn (fun () -> f (C (k, tid))) tid
+    | effect (Resume ((C (t, nid)), v)) k ->
+        enqueue (C (k, tid)) ; spawn (fun () -> continue t v) nid
+    | effect GetTid k -> spawn (fun () -> continue k tid) tid
+
+let run f =
+  Printf.printf   "=== Start scheduling ===\n%!" ;
+  for i = 1 to nb_domain - 1  do
+    Printf.printf "=    Spawn domain %d    =\n%!" i ;
+    Domain.spawn (fun () -> dequeue false)
+  done ;
+  spawn f (fresh_tid ())
