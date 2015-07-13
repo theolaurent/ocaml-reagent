@@ -18,6 +18,14 @@ val commit : t -> bool
 
 val kCAS : t list -> bool
 
+val try_map : ('a -> 'a) -> 'a ref -> bool
+
+val map : ('a -> 'a) -> 'a ref -> unit
+
+val incr : int ref -> unit
+
+val decr : int ref -> unit
+
 module Sugar : sig
   type 'a casupdt = 'a updt
   type 'a casref = 'a ref
