@@ -21,7 +21,7 @@ let sum_work i =
   let rec loop sum = match Reagent.run (MSQueue.pop q) () with
     | None -> sum
     | Some x ->
-       Printf.printf "Domain [%d], Worker [%d]: Dequeuing %d\n%!" x ;
+       Printf.printf "Domain [%d], Worker [%d]: Dequeuing %d\n%!" (Domain.self ()) i x ;
        loop (sum + x)
   in let sum = loop 0 in
      Printf.printf "Domain [%d], Worker [%d]: Posting %d\n%!" (Domain.self ()) i sum ;
