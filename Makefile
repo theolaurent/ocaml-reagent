@@ -7,7 +7,7 @@ BYTES=$(TEST:.ml=.byte)
 DEBUG=$(TEST:.ml=.d.byte)
 
 
-FLAGS=-Is lib,internals,core,various -lib unix
+FLAGS=-Is extlib,core,communication,examples -lib unix
 
 .PHONY:byte debug clean cmos
 
