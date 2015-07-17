@@ -4,11 +4,11 @@ open Reagent.Sugar
 
 let q = MSQueue.create ()
 
-let nb_workers = 32
+let nb_workers = 10
 
 let (post, get) = Channel.create ()
 
-let step = 10000
+let step = 1000
 
 let enqueue_work i =
   for j = (i + 1) * step to (i + 2) * step - 1 do
