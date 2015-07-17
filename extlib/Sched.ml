@@ -35,9 +35,11 @@ let rec dequeue () =
   let b = Backoff.create () in
   let rec loop () = match HW_MSQueue.pop queue with
     | Some (C (k, i)) -> spawn (fun () -> continue k ()) i
-    | None -> if !nb_idle + 1 = nb_domain then ()
-              else ( CAS.incr nb_idle ; (* not the most efficient... *)
-                     Backoff.once b ;
+    | None -> CAS.incr nb_idle ; (* not the most efficient... *)
+              if !nb_idle = nb_domain
+              then Printf.printf "= Domain %d terminated  =\n%!"
+                                  (Domain.self ())
+              else ( Backoff.once b ;
                      CAS.decr nb_idle ;
                      loop () )
   in loop ()
