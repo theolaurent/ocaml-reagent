@@ -1,7 +1,7 @@
 
 (* really simple interface for now *)
 
-type 'a cont = C of ('a, unit) continuation * int
+type 'a cont = ('a, unit) continuation
 
 effect Fork : (unit -> unit) -> unit
 effect Yield : unit
@@ -34,7 +34,7 @@ let rec dequeue () =
   (* Right now just retrying.            *)
   let b = Backoff.create () in
   let rec loop () = match HW_MSQueue.pop queue with
-    | Some (C (k, i)) -> spawn (fun () -> continue k ()) i
+    | Some k -> continue k ()
     | None -> CAS.incr nb_idle ; (* not the most efficient... *)
               if !nb_idle = nb_domain
               then Printf.printf "= Domain %d terminated  =\n%!"
@@ -43,14 +43,15 @@ let rec dequeue () =
                      CAS.decr nb_idle ;
                      loop () )
   in loop ()
-and spawn f tid = match f () with
+and spawn f (tid:int) = match f () with
     | () -> dequeue ()
-    | effect (Fork f) k -> enqueue (C (k, tid)) ; spawn f (fresh_tid ())
-    | effect Yield k -> enqueue (C (k, tid)) ; dequeue ()
-    | effect (Suspend f) k -> spawn (fun () -> f (C (k, tid))) tid
-    | effect (Resume ((C (t, nid)), v)) k ->
-        enqueue (C (k, tid)) ; spawn (fun () -> continue t v) nid
-    | effect GetTid k -> spawn (fun () -> continue k tid) tid
+    | effect (Fork f) k -> enqueue k ; spawn f (fresh_tid ())
+    | effect Yield k -> enqueue k ; dequeue ()
+    | effect (Suspend f) k -> spawn (fun () -> f k) tid
+                              (* TODO: I am not sure of all the consequences *)
+                              (* of that spawn...                            *)
+    | effect (Resume (t, v)) k -> enqueue k ; continue t v
+    | effect GetTid k -> continue k tid
 
 let run f =
   Printf.printf   "=== Start scheduling ===\n%!" ;
