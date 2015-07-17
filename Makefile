@@ -6,12 +6,16 @@ CMOS=$(ALL:.ml=.cmo)
 BYTES=$(TEST:.ml=.byte)
 DEBUG=$(TEST:.ml=.d.byte)
 
+REAGENTS=ReagentLib.cma
 
 FLAGS=-Is extlib,core,communication,examples -lib unix
 
-.PHONY:byte debug clean cmos
+.PHONY:byte reagents debug clean cmos
 
-all: cmos tests
+all: cmos reagents tests
+
+reagents:
+	ocamlbuild $(FLAGS) $(REAGENTS)
 
 cmos:
 	ocamlbuild $(FLAGS) $(CMOS)
