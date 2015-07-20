@@ -1,12 +1,11 @@
 
-TEST=$(wildcard test/*.ml)
+TEST=test/composition.byte test/sum_queue.byte test/queue_test.byte test/swap.byte test/trivial.byte
 
-BYTES=$(TEST:.ml=.byte)
-DEBUG=$(TEST:.ml=.d.byte)
+DEBUG=$(TEST:.byte=.d.byte)
 
 REAGENTS=ReagentLib.cma
 
-FLAGS=-Is extlib,core,communication,examples -lib unix
+FLAGS=-Is extlib,core,communication,examples,test -lib unix
 
 .PHONY: tests reagents debug clean
 
@@ -16,7 +15,7 @@ reagents:
 	ocamlbuild $(FLAGS) $(REAGENTS)
 
 tests:
-	ocamlbuild $(FLAGS) $(BYTES)
+	ocamlbuild $(FLAGS) $(TEST)
 
 debug:
 	ocamlbuild $(FLAGS) $(DEBUG)

@@ -14,8 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module Make (Sched : Scheduler.S) = struct
-  module Reagent = Reagent.Make (Sched)
-  module Channel = Channel.Make (Sched)
-  module MSQueue = MSQueue.Make (Sched)
-end
+
+type 'a t
+
+val create : unit -> 'a t
+
+val push : 'a -> 'a t -> unit
+
+val pop : 'a t -> 'a option
