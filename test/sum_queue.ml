@@ -1,4 +1,6 @@
 
+module ReagentLib = ReagentLib.Make (Sched)
+open ReagentLib
 
 open Reagent.Sugar
 

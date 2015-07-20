@@ -1,4 +1,7 @@
 
+module ReagentLib = ReagentLib.Make (Sched)
+open ReagentLib
+
 
 let main () =
   for i = 0 to 31 do

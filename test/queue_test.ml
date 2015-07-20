@@ -1,3 +1,7 @@
+
+module ReagentLib = ReagentLib.Make (Sched)
+open ReagentLib
+
 open Printf
 
 module type QUEUE = sig
@@ -14,7 +18,7 @@ end
 
 module FunQ : QUEUE = struct
 
-  module N = NaiveConcurrentQueue
+  module N = NaiveConcurrentQueue.Make (Sched)
 
   type 'a t = 'a N.t
 

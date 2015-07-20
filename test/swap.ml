@@ -1,3 +1,7 @@
+
+module ReagentLib = ReagentLib.Make (Sched)
+open ReagentLib
+
 open Printf
 open Reagent.Sugar
 open Sched
