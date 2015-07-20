@@ -7,10 +7,12 @@ type 'a node =
   | Nil
   | Next of 'a * 'a node casref
 
-type 'a t = { head : 'a node casref ; tail : 'a node casref }
+type 'a t =
+  { head : 'a node casref ;
+    tail : 'a node casref }
+
 (* the first node of the list starting a head is ignored *)
 (* the tail never point to Nil                           *)
-
 let create () =
   let head = (Next (Obj.magic (), ref Nil)) in
   { head = ref head ; tail = ref head }
