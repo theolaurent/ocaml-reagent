@@ -6,7 +6,7 @@ val pc : (unit -> unit) -> unit t
 
 val count_cas : 'a t -> int
 
-val has_cas : 'a t -> CAS.t -> bool
+val has_cas_on : 'a t -> 'b CAS.ref -> bool
 
 val try_commit : 'a t -> bool
 
@@ -20,11 +20,10 @@ val bind : 'a t -> ('a -> 'b t) -> 'b t
 
 val map : ('a -> 'b) -> 'a t -> 'b t
 
-module Sugar :
-  sig
-    val rx_return : 'a -> 'a t
-    val rx_value : 'a t -> 'a
-    val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
-    val ( >> ) : 'a t -> 'b t -> 'b t
-    val ( !! ) : 'a t -> bool
-  end
+module Sugar : sig
+  val rx_return : 'a -> 'a t
+  val rx_value : 'a t -> 'a
+  val ( >>= ) : 'a t -> ('a -> 'b t) -> 'b t
+  val ( >> ) : 'a t -> 'b t -> 'b t
+  val ( !! ) : 'a t -> bool
+end

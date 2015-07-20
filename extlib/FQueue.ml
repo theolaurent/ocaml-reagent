@@ -1,5 +1,3 @@
-
-
 (* first list for out, second for in *)
 type 'a t = Q of 'a list * 'a list
 
@@ -13,8 +11,6 @@ let rec pop q = match q with
   | Q ([], []) -> raise Empty
   | Q (e::o, i) -> (e, (Q (o, i)))
   | Q ([], i) -> pop (Q (List.rev i, []))
-
-
 
 (* this is fold_left/right considering push is analog to cons *)
 let fold_left f n (Q (o, i)) =

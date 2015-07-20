@@ -23,7 +23,8 @@ let pop q =
       | Nil -> failwith "HW_MSQueue.pop: broken invariant"
       | Next (_, x) -> !x
     in match nhead with
-     | Next  (v, _) when (q.head <!= s --> nhead) -> v
+     | Nil -> None
+     | Next  (v, _) when (q.head <!= s --> nhead) -> Some v
      | _ -> Backoff.once b ; loop ()
   in loop ()
 
