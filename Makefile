@@ -1,8 +1,6 @@
 
 TEST=$(wildcard test/*.ml)
-ALL=$(wildcard */*.ml)
 
-CMOS=$(ALL:.ml=.cmo)
 BYTES=$(TEST:.ml=.byte)
 DEBUG=$(TEST:.ml=.d.byte)
 
@@ -10,15 +8,12 @@ REAGENTS=ReagentLib.cma
 
 FLAGS=-Is extlib,core,communication,examples -lib unix
 
-.PHONY:byte reagents debug clean cmos
+.PHONY: tests reagents debug clean
 
-all: cmos reagents tests
+all: reagents tests
 
 reagents:
 	ocamlbuild $(FLAGS) $(REAGENTS)
-
-cmos:
-	ocamlbuild $(FLAGS) $(CMOS)
 
 tests:
 	ocamlbuild $(FLAGS) $(BYTES)
