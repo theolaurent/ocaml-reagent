@@ -24,6 +24,8 @@ val get : 'a ref -> 'a
 
 type t
 
+val cas : 'a ref -> 'a updt -> t
+
 val is_on_ref : t -> 'a ref -> bool
 
 val commit : t -> bool

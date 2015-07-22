@@ -38,6 +38,8 @@ let get r = match r.content with
 
 type t = CAS : 'a ref * 'a updt -> t
 
+let cas r u = CAS (r, u)
+
 let is_on_ref (CAS (r1, _)) r2 = r1.id == r2.id
 
 let commit (CAS (r, { expect ; update })) =
@@ -87,8 +89,8 @@ end = struct
 
   let (-->) expect update = { expect ; update }
 
-  let (<!=) r u = commit (CAS (r, u))
-  let (<:=) r u = CAS (r, u)
+  let (<:=) = cas
+  let (<!=) r u = commit (cas r u)
 end
 
 open Sugar
