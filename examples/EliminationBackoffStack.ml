@@ -19,7 +19,7 @@ module type S = sig
   type 'a t
   val create : unit -> 'a t
   val push : 'a t -> ('a, unit) reagent
-  val pop : 'a t -> (unit, 'a) reagent
+  val try_pop : 'a t -> (unit, 'a option) reagent
 end
 
 module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
@@ -42,16 +42,13 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
     { queue = ref [] ; popchan = a ; pushchan = b }
 
   let push s =
-    (* the order in choose is here important, and makes a subtle difference *)
-        Channel.swap s.pushchan
-    >+> Reagent.update s.queue (fun (l, a) -> Some (a :: l, ()))
+        Reagent.update s.queue (fun (l, a) -> (a :: l, ()))
+    >+> Channel.swap s.pushchan
 
-  (* blocking when no pop is possible, but posting on the channel *)
-  (* if you want a try_pop, combine with attempt!                 *)
-  let pop s =
+  let try_pop s =
         Reagent.update s.queue (fun (l, ()) -> match l with
-                                       | [] -> None
-                                       | h :: t -> Some (t, h))
-    >+> Channel.swap s.popchan
+                                       | [] -> ([], None)
+                                       | h :: t -> (t, Some h))
+    >+> (Channel.swap s.popchan >>> Reagent.lift (fun x -> Some x))
 
 end

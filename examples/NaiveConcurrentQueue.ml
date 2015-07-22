@@ -46,11 +46,11 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
 
   let create () = ref FQueue.empty
 
-  let push q = Reagent.update q (fun (fq, v) -> Some (FQueue.push v fq, ()))
+  let push q = Reagent.update q (fun (fq, v) -> (FQueue.push v fq, ()))
 
-  let pop q = Reagent.attempt ( Reagent.update q (fun (fq, ()) ->
-                                  try let (v, nq) = FQueue.pop fq in Some (nq, v)
-                                  with FQueue.Empty -> None) )
+  let pop q = Reagent.update q (fun (fq, ()) ->
+                                try let (v, nq) = FQueue.pop fq in (nq, Some v)
+                                with FQueue.Empty -> (fq, None))
 
   let pop_until q f =
     let rec loop fq =
@@ -59,7 +59,7 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
         if not (f v) then loop n
         else fq
       with FQueue.Empty -> fq
-    in Reagent.update q (fun (fq, ()) -> Some (loop fq, ()))
+    in Reagent.update q (fun (fq, ()) -> (loop fq, ()))
 
   type 'a cursor = 'a FQueue.t
 

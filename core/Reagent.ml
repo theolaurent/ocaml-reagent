@@ -30,7 +30,7 @@ module type S = sig
   val attempt : ('a, 'b) t -> ('a, 'b option) t
   val computed : ('a -> (unit, 'b) t) -> ('a, 'b) t
   val cas : 'a CAS.ref -> 'a CAS.updt -> (unit, unit) t
-  val update : 'a CAS.ref -> (('a * 'b) -> ('a * 'c) option) -> ('b, 'c) t
+  val update : 'a CAS.ref -> (('a * 'b) -> ('a * 'c)) -> ('b, 'c) t
   val post_commit : ('a -> unit) -> ('a, 'a) t
   val pair : ('a, 'b) t -> ('a, 'c) t -> ('a, 'b * 'c) t
   type ('a, 'b) message
@@ -203,12 +203,11 @@ module Make (Sched : Scheduler.S) : S = struct
   (* TODO: document that it will block indefinetly if the cas is already part *)
   (* of the reaction. This is to be used with attemps/choose.                 *)
 
-  (* TODO: document that it blocks when None *)
-  let update (r:'a casref) (f:('a * 'b) -> ('a * 'c) option) : ('b, 'c) t =
+  (* TODO: document that it should be called only with pure functions (as lift) *)
+  let update (r:'a casref) (f:('a * 'b) -> ('a * 'c)) : ('b, 'c) t =
     computed (fun b -> let a = !r in
-                       match f (a, b) with
-                       | None -> never
-                       | Some (a', c) -> pipe (cas r (a --> a')) (constant c))
+                       let (a', c) = f (a, b) in
+                       pipe (cas r (a --> a')) (constant c))
 
   let post_commit (f:'a -> unit) : ('a, 'a) t =
     let apply rx next =
