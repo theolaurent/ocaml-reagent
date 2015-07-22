@@ -51,16 +51,11 @@ module Make (Sched : Scheduler.S) : S = struct
   open CAS.Sugar
   open Reaction.Sugar
 
-  (* TODO: optim when only one cas                       *)
-
-  type 'a result =
-    | Imm of 'a
-    | Retry
-    | Block of ('a Offer.t -> unit)
-    | BlockOrRetry of ('a Offer.t -> unit)
   (* When blocking/retrying, the offer should always be embedded in a message *)
   (* or completely ignored, but it should never be fulfilled without taking   *)
   (* care of the reaction.                                                    *)
+
+  type 'r res = Ok of 'r | Block | Retry
 
   (* TODO: variance *)
   type optim_flags = {
@@ -71,7 +66,8 @@ module Make (Sched : Scheduler.S) : S = struct
                             (* no CASes will be performed.                   *)
     }
   (* just a wrapper for the universal quantification *)
-  and ('a, 'b) react_fun = { apply : 'r . 'a Reaction.t -> ('b, 'r) t -> 'r result }
+  and ('a, 'b) react_fun = { apply : 'r . 'a Reaction.t -> ('b, 'r) t
+                                                        -> 'r Offer.t -> 'r res }
   (* This GADT introduce some heavy type annotations but *)
   (* is necessary for the type system to accept what's   *)
   (* going on when commiting.                            *)
@@ -83,9 +79,11 @@ module Make (Sched : Scheduler.S) : S = struct
     | Nope -> true
     | Reagent (_, { alwaysCommit }) -> alwaysCommit
 
-  let rec try_react : type a b . (a, b) t -> (a, b) react_fun = fun r -> match r with
+  let rec try_react : type a b . (a, b) t -> (a, b) react_fun =
+    fun r -> match r with
     | Nope -> let apply (type c) (type r) (rx:c Reaction.t)
-                            (next:(c, r) t) : r result = match next with
+                        (next:(c, r) t)   (offer: r Offer.t) : r res =
+                match next with
                 | Nope -> if !! rx then Imm (rx_value rx) else Retry
                 | _    -> (try_react next).apply rx Nope
               in { apply }

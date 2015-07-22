@@ -36,64 +36,93 @@ module Make (Sched : Scheduler.S) : S = struct
 
   (* TODO: GADT to ensure that dummy is a unit status? *)
   type 'a status =
-    | Waiting
-    | Completed of 'a
-    | WakenUp
-    | Dummy
+    | Dummy (* TODO: GADT to ensure that it is a unit one *)
+    | New
+    | Waiting of 'a Sched.cont
+    | Answered of 'a
+    | ToBeWaken of 'a * 'a Sched.cont (* optimisation purpose *)
+    | Garbage (* TODO : use that for removable catalysits *)
 
   (* The thread is suposed to be resumed only once, and when    *)
   (* the message has been completed.                            *)
   (* Also, all completed offers should be waken at some point.  *)
-  type 'a t = { state  : 'a status casref     ;
-                thread : 'a Sched.cont option }
+
+  (* TODO: change that /\ to something explaning the new invariants... *)
+
+  type 'a t = 'a status casref
 
 
-  (* TODO : removable catalysits *)
-  let catalist = { state = ref Dummy ; thread = None }
+  let create () = ref New
 
-  let is_waiting o = match !(o.state) with
-    | Waiting | Dummy -> true
-    | _               -> false
+  let is_available o = match !o with
+    | Waiting  _ | New         | Dummy   -> true
+    | Answered _ | ToBeWaken _ | Garbage -> false
+
+
+  let extract_value o = let s = !o in match s with
+    | Answered a when (o <!= s --> Garbage) -> a
+    (* TODO: this cas cause useless overhead but checks things *)
+    | _          -> failwith "Error TODO 1"
+
+
+  (* TODO: rx! or reagent! *)
+  let wait_for o =
+    let suspend () =
+      Sched.suspend
+        (fun k -> (* TODO: ensure by typing that the offer is yours  *)
+                  (* and NOT a catalyst!                             *)
+                  (* Hmm.. That seems difficult without linear types *)
+                  (* TODO: check if it is completed...               *)
+                  if not (o <!= New --> Waiting k) then
+                    Sched.resume k (extract_value o)) in
+    let s = !o in match s with
+      | New   -> suspend ()
+      | _     -> extract_value o (* this cover all cases of error, subtle... *)
+
+
+  (* for the sake of optimisation, complete is not wake *)
+  let rx_complete o a =
+    let wake () =
+      let s = !o in match s with
+        | Dummy -> ()
+        | Answered -> ()
+        | ToBeWaken (x, k) when (o <!= s --> Garbage) -> Sched.resume k x
+        (* TODO: this cas cause useless overhead but checks things *)
+        | _     -> failwith "Offer.rx_complete: broken invariant."
+    in match !o with
+       | Dummy -> rx_return ()
+       | (* PB : cannot provide one cas... *)
+
 
   let rx_complete o a =
     let wake x () =
-      let s = !(x.state) in
-      match s with
-      | Completed v when (x.state <!= s --> WakenUp)
-              -> begin match x.thread with
-                       | None -> ()
-                       | Some t -> Sched.resume t v
-                 end
-      | _     -> raise (Invalid_argument "Offer.rx_complete: \
-                   trying to wake a non-completed or already waken offer")
     in match !(o.state) with
     | Dummy -> rx_return ()
     | _ -> Reaction.cas (o.state <:= Waiting --> Completed a)
         >> Reaction.pc (wake o)
 
-  let rx_has rx o = Reaction.has_cas_on rx o.state
-
-  let try_get_result o =
-    let () = if not (o.thread == None) then
-      raise (Invalid_argument "Offer.try_get_result: \
-        trying to get the result of a blocking offer")
-    in
-    let s = !(o.state) in
-    match s with
-    | Completed v when (o.state <!= s --> WakenUp)
-              -> Some v
-    | Waiting -> None
-    | _       -> raise (Invalid_argument "Offer.try_get_result: \
-                   trying to get the result of an already waken offer")
-
-  let post_and_suspend f =
-    Sched.suspend (fun k -> f { state = ref Waiting ; thread = Some k })
-
-  let post_and_return f =
-     let o = { state = ref Waiting ; thread = None } in
-     let () = Sched.fork (fun () -> f o) in
-     o
-
+  (* let rx_has rx o = Reaction.has_cas_on rx o.state *)
+  (*  *)
+  (* let try_get_result o = *)
+  (*   let () = if not (o.thread == None) then *)
+  (*     raise (Invalid_argument "Offer.try_get_result: \ *)
+  (*       trying to get the result of a blocking offer") *)
+  (*   in *)
+  (*   let s = !(o.state) in *)
+  (*   match s with *)
+  (*   | Completed v when (o.state <!= s --> WakenUp) *)
+  (*             -> Some v *)
+  (*   | Waiting -> None *)
+  (*   | _       -> raise (Invalid_argument "Offer.try_get_result: \ *)
+  (*                  trying to get the result of an already waken offer") *)
+  (*  *)
+  (* let post_and_suspend f = *)
+  (*   Sched.suspend (fun k -> f { state = ref Waiting ; thread = Some k }) *)
+  (*  *)
+  (* let post_and_return f = *)
+  (*    let o = { state = ref Waiting ; thread = None } in *)
+  (*    let () = Sched.fork (fun () -> f o) in *)
+  (*    o *)
   (*
 
   let try_resume o a =
