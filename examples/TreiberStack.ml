@@ -33,12 +33,12 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
 
   type 'a t = { head : 'a list casref }
 
-  let push stack = Reagent.update stack.head (fun (s, v) -> Some (v :: s, ()))
+  let push stack = Reagent.update stack.head (fun (s, v) -> (v :: s, ()))
 
   (* TODO: should use update reagent? *)
   let tryPop stack =
-    Reagent.attempt ( Reagent.update stack.head (fun (s, ()) -> match s with
-                        | [] -> None
-                        | h :: t -> Some (t, h)) )
+    Reagent.update stack.head (fun (s, ()) -> match s with
+                               | [] -> (s, None)
+                               | h :: t -> (t, Some h))
 
 end
