@@ -31,20 +31,16 @@ let compare_and_swap r x y =
 
 let ref x = { content = Normal x           ;
               id      = Oo.id (object end) }
-            (* I've been told this is supposed *)
-            (* to be a thread-safe unique id   *)
-
-type refid = int
-
-let id r = r.id
 
 let get r = match r.content with
   | Normal a -> a
   | OnGoingKCAS a -> a
 
-type t =
-  | CAS : 'a ref * 'a updt -> t
+type t = CAS : 'a ref * 'a updt -> t
 
+let cas r u = CAS (r, u)
+
+let is_on_ref (CAS (r1, _)) r2 = r1.id == r2.id
 
 let commit (CAS (r, { expect ; update })) =
   let s = r.content in
@@ -93,8 +89,8 @@ end = struct
 
   let (-->) expect update = { expect ; update }
 
-  let (<!=) r u = commit (CAS (r, u))
-  let (<:=) r u = CAS (r, u)
+  let (<:=) = cas
+  let (<!=) r u = commit (cas r u)
 end
 
 open Sugar

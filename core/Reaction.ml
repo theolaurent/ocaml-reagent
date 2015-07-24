@@ -26,10 +26,8 @@ let pc  f = { pc_list  = [ f ] ; cas_list = [] ; result = () }
 
 let count_cas r = List.length r.cas_list
 
-let has_cas_on rx r =
-  let id = CAS.id r in
-  (* TODO: optim with a list of ref ids? *)
-  List.exists (fun (CAS.CAS (r, _)) -> CAS.id r = id) rx.cas_list
+(* TODO: optim with a list of ref ids? *)
+let has_cas_on rx r = List.exists (fun cas -> CAS.is_on_ref cas r) rx.cas_list
 
 let try_commit r =
   let success = match r.cas_list with

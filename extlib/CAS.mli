@@ -18,16 +18,15 @@ type 'a ref
 
 type 'a updt = { expect : 'a ; update : 'a }
 
-type refid
-
 val ref : 'a -> 'a ref
-
-val id : 'a ref -> refid
 
 val get : 'a ref -> 'a
 
-type t =
-  | CAS : 'a ref * 'a updt -> t
+type t
+
+val cas : 'a ref -> 'a updt -> t
+
+val is_on_ref : t -> 'a ref -> bool
 
 val commit : t -> bool
 
