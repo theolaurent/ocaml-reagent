@@ -62,7 +62,7 @@ let semicas (CAS (r, { expect ; _ })) =
 (* so we don't need to cas, just set the field to the new value          *)
 let rollbwd (CAS (r, _)) =
   match r.content with
-  | Normal _      -> failwith "CAS.kCAS: broken invariant"
+  | Normal _      -> ()
   | OnGoingKCAS x -> r.content <- Normal x
 
 let rollfwd (CAS (r, { update ; _ })) =
