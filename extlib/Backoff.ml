@@ -15,15 +15,15 @@
  *)
 
 (* it is assumed to be private (no CAS) *)
-(* TODO: use something else than int, to prevent overflows? *)
-type t = int ref
+
+type t = int * int ref
 
 let _ = Random.self_init ()
 
-let create () = ref 1
+let create ?(max=max_int) () = (max, ref 1)
 
-let once r =
+let once (maxv, r) =
   let t = Random.int (!r) in
-  r := 2 * !r ;
+  r := min (2 * !r) maxv;
   if t = 0 then ()
   else ignore (Unix.select [] [] [] (0.001 *. (float_of_int t)))

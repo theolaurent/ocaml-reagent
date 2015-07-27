@@ -1,5 +1,5 @@
 
-TEST=test/composition.byte test/sum_queue.byte test/queue_test.byte test/swap.byte test/trivial.byte
+TEST=test/composition.byte test/sum_queue.byte test/queue_test.byte test/swap.byte test/trivial.byte test/queue_test_low.byte
 
 EXS=$(wildcard examples/*.ml)
 

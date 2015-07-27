@@ -16,6 +16,6 @@
 
 type t
 
-val create : unit -> t
+val create : ?max:int -> unit -> t
 
 val once : t -> unit

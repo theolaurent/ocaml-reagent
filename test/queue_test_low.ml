@@ -112,17 +112,26 @@ end
 
 module Test (Q : QUEUE) = struct
 
+  let all_empty qa =
+    Array.fold_left (fun acc q ->
+      match Q.pop q with
+      | None -> acc
+      | _ -> false) true qa
+
   let run num_doms items_per_domain =
-    let q : int Q.t = Q.create () in
+    let q : int Q.t array = Array.init num_doms (fun _ -> Q.create ()) in
     let b : Barrier.t = Barrier.create num_doms in
     (* initialize work *)
     let rec produce = function
       | 0 -> printf "[%d] production complete\n%!" (Domain.self ())
-      | i -> Q.push q i; produce (i-1)
+      | i -> Q.push (Array.get q (i mod num_doms)) i; produce (i-1)
     in
     let rec consume i =
-      match Q.pop q with
-      | None -> printf "[%d] consumed=%d\n%!" (Domain.self ()) i
+      match Q.pop (Array.get q (i mod num_doms)) with
+      | None ->
+          if all_empty q then
+            printf "[%d] consumed=%d\n%!" (Domain.self ()) i
+          else ()
       | Some _ -> consume (i+1)
     in
     for i = 1 to num_doms - 1 do

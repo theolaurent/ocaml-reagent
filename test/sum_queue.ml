@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-module ReagentLib = ReagentLib.Make (Sched)
+module ReagentLib = ReagentLib.Make (Sched_sq)
 open ReagentLib
 
 open Reagent.Sugar
@@ -48,7 +48,7 @@ let main () =
   Printf.printf "Enter main\n%!" ;
   for i = 0 to nb_workers - 1 do
     Printf.printf "Forking worker %d\n%!" i ;
-    Sched.fork (fun () -> enqueue_work i ; sum_work i)
+    Sched_sq.fork (fun () -> enqueue_work i ; sum_work i)
   done ;
   Printf.printf "Fetching sums\n%!" ;
   let sum () =
@@ -58,4 +58,4 @@ let main () =
   Printf.printf "Sum     : %d\n%!" (sum ()) ;
   Printf.printf "Expected: %d\n%!" (let n = step * nb_workers - 1 in (n * (n + 1)) / 2)
 
-let () = Sched.run main
+let () = Sched_sq.run main

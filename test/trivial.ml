@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Sched = Sched_sq
 module ReagentLib = ReagentLib.Make (Sched)
 open ReagentLib
 

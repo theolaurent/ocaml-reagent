@@ -66,7 +66,7 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
     let rec find_tail_and_enq curr_end node =
           Reagent.cas curr_end (Nil --> node)
       >+> Reagent.computed (fun () -> match !curr_end with
-            | Nil -> failwith "MSQueue.push: broken invariant."
+            | Nil -> find_tail_and_enq curr_end node (* failwith "MSQueue.push: broken invariant." *)
             | Next (_, n) -> find_tail_and_enq n node
           )
     in

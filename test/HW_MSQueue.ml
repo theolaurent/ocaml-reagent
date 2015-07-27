@@ -45,16 +45,16 @@ let pop q =
      | _ -> Backoff.once b ; loop ()
   in loop ()
 
-let push v q =
+let push q v =
   let rec find_tail_and_enq curr_end node =
     if curr_end <!= (Nil --> node) then ()
     else match !curr_end with
-          | Nil -> failwith "HW_MSQueue.push: broken invariant."
+          | Nil -> find_tail_and_enq curr_end node (* failwith "HW_MSQueue.push: broken invariant (1)." *)
           | Next (_, n) -> find_tail_and_enq n node
   in
   let newnode = Next (v, ref Nil) in
   match !(q.tail) with
-  | Nil         -> failwith "HW_MSQueue.push: broken invariant."
+  | Nil         -> failwith "HW_MSQueue.push: broken invariant (2)."
   | Next (_, n) -> find_tail_and_enq n newnode ;
                    (* try to update tail, but ignore when fail *)
                    ignore (q.tail <!= !(q.tail) --> newnode)
