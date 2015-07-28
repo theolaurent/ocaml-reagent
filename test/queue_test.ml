@@ -134,7 +134,9 @@ module Test (Q : QUEUE) = struct
 end
 
 let main () =
-  let module M1 = Test(MakeQ(NaiveConcurrentQueue.Make(S))) in
+  (* let module M1 = Test(MakeQ(NaiveConcurrentQueue.Make(S))) in *)
+  (* let module M1 = Test(MakeQ(MSQueue)) in *)
+  let module M1 = Test(HW_MSQueue) in
   let (m,sd) = Benchmark.benchmark (fun () -> M1.run num_doms items_per_dom) 1 in
   printf "FunQ: mean = %f, sd = %f tp=%f\n%!" m sd (float_of_int num_items /. m)
 
