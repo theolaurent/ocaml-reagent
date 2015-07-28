@@ -19,7 +19,7 @@ module type S = sig
   type 'a t
   val create : unit -> 'a t
   val push : 'a t -> ('a, unit) reagent
-  val try_pop : 'a t -> (unit, 'a option) reagent
+  val tryPop : 'a t -> (unit, 'a option) reagent
 end
 
 module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
@@ -45,7 +45,7 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
         Reagent.update s.queue (fun (l, a) -> (a :: l, ()))
     >+> Channel.swap s.pushchan
 
-  let try_pop s =
+  let tryPop s =
         Reagent.update s.queue (fun (l, ()) -> match l with
                                        | [] -> ([], None)
                                        | h :: t -> (t, Some h))

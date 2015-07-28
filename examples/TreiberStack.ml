@@ -18,6 +18,7 @@ module type S = sig
   type ('a, 'b) reagent
 
   type 'a t
+  val create : unit -> 'a t
   val push : 'a t -> ('a, unit) reagent
   val tryPop : 'a t -> (unit, 'a option) reagent
 end
@@ -32,6 +33,8 @@ module Make (Sched : Scheduler.S) : S with type ('a, 'b) reagent
   open Reagent.Sugar
 
   type 'a t = { head : 'a list casref }
+
+  let create () = {head = CAS.Sugar.ref []}
 
   let push stack = Reagent.update stack.head (fun (s, v) -> (v :: s, ()))
 
