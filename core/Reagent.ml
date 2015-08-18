@@ -313,6 +313,6 @@ module Make (Sched : Scheduler.S) : S = struct
     | Imm _ | Retry | BlockOrRetry _ ->
        raise (Invalid_argument "Reagent.dissolve: \
          only blocking reagent are supposed to be called with dissolve")
-    | Block f -> f Offer.catalist
+    | Block f -> f Offer.catalyst
 
 end

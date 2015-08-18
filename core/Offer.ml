@@ -16,16 +16,14 @@
 
 module type S = sig
   type 'a t
-  val catalist : unit t
-  val is_waiting : 'a t -> bool
-  val rx_complete : 'a t -> 'a -> unit Reaction.t
-  val rx_has : 'a Reaction.t -> 'b t -> bool
-  (* TODO: document, internal, only on non blocking, *)
-  (* return None only when waiting and Some when     *)
-  (* completing successfully.                        *)
-  val try_get_result : 'a t -> 'a option
-  val post_and_suspend : ('a t -> unit) -> 'a
-  val post_and_return : ('a t -> unit) -> 'a t
+  val catalyst          : unit t
+  val post_and_suspend  : ('a t -> unit) -> 'a
+  val post_and_return   : ('a t -> unit) -> 'a t
+
+  val is_waiting        : 'a t -> bool
+  val rx_complete       : 'a t -> 'a -> unit Reaction.t
+  val rx_has            : 'a Reaction.t -> 'b t -> bool
+  val try_get_result    : 'a t -> 'a option
   (* val try_resume : 'a t -> 'a -> bool *)
 end
 
@@ -38,36 +36,36 @@ module Make (Sched : Scheduler.S) : S = struct
   type 'a status =
     | Waiting
     | Completed of 'a
-    | WakenUp
-    | Dummy
+    | Wokenup
+    | Catalyst
 
-  (* The thread is suposed to be resumed only once, and when    *)
-  (* the message has been completed.                            *)
-  (* Also, all completed offers should be waken at some point.  *)
+  (* The thread is suposed to be resumed only once, and when the message has
+   * been completed. Also, all completed offers should be woken at some point.
+   * *)
   type 'a t = { state  : 'a status casref     ;
                 thread : 'a Sched.cont option }
 
 
-  (* TODO : removable catalysits *)
-  let catalist = { state = ref Dummy ; thread = None }
+  (* TODO : removable catalysts *)
+  let catalyst = { state = ref Catalyst ; thread = None }
 
   let is_waiting o = match !(o.state) with
-    | Waiting | Dummy -> true
+    | Waiting | Catalyst -> true
     | _               -> false
 
   let rx_complete o a =
     let wake x () =
       let s = !(x.state) in
       match s with
-      | Completed v when (x.state <!= s --> WakenUp)
+      | Completed v when (x.state <!= s --> Wokenup)
               -> begin match x.thread with
                        | None -> ()
                        | Some t -> Sched.resume t v
                  end
       | _     -> raise (Invalid_argument "Offer.rx_complete: \
-                   trying to wake a non-completed or already waken offer")
+                   Trying to wakeup an incomplete or already woken up offer")
     in match !(o.state) with
-    | Dummy -> rx_return ()
+    | Catalyst -> rx_return ()
     | _ -> Reaction.cas (o.state <:= Waiting --> Completed a)
         >> Reaction.pc (wake o)
 
@@ -80,7 +78,7 @@ module Make (Sched : Scheduler.S) : S = struct
     in
     let s = !(o.state) in
     match s with
-    | Completed v when (o.state <!= s --> WakenUp)
+    | Completed v when (o.state <!= s --> Wokenup)
               -> Some v
     | Waiting -> None
     | _       -> raise (Invalid_argument "Offer.try_get_result: \

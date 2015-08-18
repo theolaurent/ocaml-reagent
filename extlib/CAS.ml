@@ -19,8 +19,8 @@
 type 'a updt = { expect : 'a ; update : 'a }
 
 type 'a state =
-  | Normal of 'a
-  | OnGoingKCAS of 'a
+  | Free of 'a
+  | Locked of 'a
 
 type 'a ref = { mutable content : 'a state ;
                         id      : int      }
@@ -29,12 +29,12 @@ let compare_and_swap r x y =
   Obj.compare_and_swap_field (Obj.repr r) 0 (Obj.repr x) (Obj.repr y)
                              (* 0 stands for the first field *)
 
-let ref x = { content = Normal x           ;
+let ref x = { content = Free x           ;
               id      = Oo.id (object end) }
 
 let get r = match r.content with
-  | Normal a -> a
-  | OnGoingKCAS a -> a
+  | Free a -> a
+  | Locked a -> a
 
 type t = CAS : 'a ref * 'a updt -> t
 
@@ -47,26 +47,26 @@ let get_id (CAS ({id;_},_)) = id
 let commit (CAS (r, { expect ; update })) =
   let s = r.content in
   match s with
-  | Normal a when a == expect -> compare_and_swap r s (Normal update)
+  | Free a when a == expect -> compare_and_swap r s (Free update)
   | _                         -> false
 
 let semicas (CAS (r, { expect ; _ })) =
   let s = r.content in
   match s with
-  | Normal a when a == expect -> compare_and_swap r s (OnGoingKCAS a)
+  | Free a when a == expect -> compare_and_swap r s (Locked a)
   | _                         -> false
 
 (* Only the thread that performed the semicas should be able to rollbwd/fwd.
  * Hence, we don't need to CAS. *)
 let rollbwd (CAS (r, _)) =
   match r.content with
-  | Normal _      -> ()
-  | OnGoingKCAS x -> r.content <- Normal x
+  | Free _      -> ()
+  | Locked x -> r.content <- Free x
 
 let rollfwd (CAS (r, { update ; _ })) =
   match r.content with
-  | Normal _ -> failwith "CAS.kCAS: broken invariant"
-  | OnGoingKCAS x ->  r.content <- Normal update
+  | Free _ -> failwith "CAS.kCAS: broken invariant"
+  | Locked x ->  r.content <- Free update
                     (* we know we have x == expect *)
 
 let kCAS l =
