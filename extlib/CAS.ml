@@ -42,6 +42,8 @@ let cas r u = CAS (r, u)
 
 let is_on_ref (CAS (r1, _)) r2 = r1.id == r2.id
 
+let get_id (CAS ({id;_},_)) = id
+
 let commit (CAS (r, { expect ; update })) =
   let s = r.content in
   match s with
@@ -54,8 +56,8 @@ let semicas (CAS (r, { expect ; _ })) =
   | Normal a when a == expect -> compare_and_swap r s (OnGoingKCAS a)
   | _                         -> false
 
-(* only the tread that perform the semicas should be able to rollbwd/fwd *)
-(* so we don't need to cas, just set the field to the new value          *)
+(* Only the thread that performed the semicas should be able to rollbwd/fwd.
+ * Hence, we don't need to CAS. *)
 let rollbwd (CAS (r, _)) =
   match r.content with
   | Normal _      -> ()
@@ -68,6 +70,8 @@ let rollfwd (CAS (r, { update ; _ })) =
                     (* we know we have x == expect *)
 
 let kCAS l =
+  let l = List.sort (fun c1 c2 -> compare (get_id c1) (get_id c2)) l
+  in
   if List.for_all (fun cas -> semicas cas) l then
     ( List.iter rollfwd l ; true )
   else
